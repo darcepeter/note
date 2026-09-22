@@ -1,0 +1,2835 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Notary</title>
+<style>
+  :root {
+    --bg: #F4F3EF; --surface: #FFFFFF; --text: #202124; --text-dim: #5F6368;
+    --border: #E0E0E0; --accent: #F9AB00; --danger: #C5221F;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #202124; --surface: #2D2E30; --text: #E8EAED;
+      --text-dim: #9AA0A6; --border: #3C4043; --accent: #F9AB00; --danger: #F28B82;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #202124; --surface: #2D2E30; --text: #E8EAED;
+    --text-dim: #9AA0A6; --border: #3C4043; --accent: #F9AB00; --danger: #F28B82;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin:0; padding:0; height:100%; background:var(--bg); color:var(--text);
+    font-family: Roboto, -apple-system, "Segoe UI", system-ui, sans-serif; overflow:hidden; }
+  #app { height:100%; display:flex; flex-direction:column; position:relative; }
+  .screen { position:absolute; inset:0; display:flex; flex-direction:column; background:var(--bg); }
+
+  header { padding:14px 14px 10px; display:flex; align-items:center; gap:10px; flex-shrink:0; }
+  header h1 { font-size:19px; font-weight:500; margin:0; user-select:none; flex-shrink:0; }
+  .mode-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-left:7px; vertical-align:middle; }
+  .back-btn { background:none; border:none; color:var(--text); font-size:20px; cursor:pointer; padding:4px 8px; margin-left:-6px; }
+  .header-menu-btn { background:none; border:none; color:var(--text); font-size:20px; cursor:pointer; padding:4px 10px; }
+  .spacer { flex:1; }
+  .photo-strip { display:flex; gap:8px; flex-wrap:wrap; margin:8px 0; }
+  .photo-thumb { position:relative; width:72px; height:72px; border-radius:8px; overflow:hidden; border:1px solid var(--border); }
+  .photo-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+  .photo-remove { position:absolute; top:2px; right:2px; width:20px; height:20px; border-radius:50%; background:rgba(0,0,0,0.55); color:#fff; border:none; font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .fab-secondary { position:absolute; bottom:20px; right:18px; width:52px; height:52px; border-radius:50%;
+    background:var(--surface); border:1px solid var(--border); color:var(--text); font-size:22px;
+    display:flex; align-items:center; justify-content:center; box-shadow:0 3px 10px rgba(0,0,0,0.28); cursor:pointer; z-index:20; }
+  .header-search { flex:1; border:1px solid var(--border); background:var(--surface); border-radius:999px;
+    padding:9px 14px; font-size:14px; color:var(--text); outline:none; font-family:inherit; }
+  .header-search::placeholder { color:var(--text-dim); }
+  .icon-btn { background:none; border:none; color:var(--text); font-size:19px; cursor:pointer; padding:4px 6px; flex-shrink:0; }
+
+  .body-scroll { flex:1; overflow-y:auto; padding:4px 12px 90px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; align-items:start; }
+  .card { position:relative; border-radius:10px; padding:12px; min-width:0; overflow:hidden;
+    border:1px solid var(--border); background:var(--surface); cursor:pointer; color:var(--text);
+    user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
+  .card-title { font-weight:700; font-size:15px; margin-bottom:4px; padding-right:22px; overflow-wrap:break-word; word-break:break-word; }
+  .card-preview { font-size:13px; line-height:1.4; color:inherit; opacity:0.85; white-space:pre-wrap; overflow-wrap:break-word; word-break:break-word; }
+  .card-meta { font-size:11.5px; color:inherit; opacity:0.65; margin-top:6px; }
+  .pill { display:inline-block; font-size:10.5px; padding:2px 7px; border-radius:999px;
+    background:rgba(0,0,0,0.12); margin-left:6px; }
+  .card-menu-btn { position:absolute; top:6px; right:6px; width:24px; height:24px; border-radius:50%;
+    background:rgba(0,0,0,0.08); border:none; color:var(--text-dim); font-size:15px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; z-index:5; line-height:1; }
+  .title-dot { color:inherit; }
+  .title-dot.locked { color:var(--text-dim); font-size:0.92em; }
+  .card.card-reorder-mode { touch-action:none; cursor:grab; }
+  .card.card-selected { box-shadow:0 0 0 2px var(--accent) inset; }
+  .card.card-no-force { box-shadow:0 0 0 2px var(--danger) inset; }
+  .card-select-check { position:absolute; top:6px; right:6px; width:22px; height:22px; border-radius:50%;
+    background:var(--accent); color:#202124; display:flex; align-items:center; justify-content:center;
+    font-size:13px; font-weight:700; z-index:6; }
+  .multiselect-bar { position:absolute; left:0; right:0; bottom:0; background:var(--surface);
+    border-top:1px solid var(--border); padding:10px 12px; display:flex; align-items:center;
+    gap:8px; flex-wrap:wrap; z-index:30; }
+  .multiselect-count { font-size:13px; color:var(--text-dim); flex:1; }
+  .multiselect-actions { display:flex; gap:6px; flex-wrap:wrap; }
+
+  .fab { position:absolute; bottom:20px; right:18px; width:52px; height:52px; border-radius:50%;
+    background:var(--accent); color:#202124; border:none; font-size:28px; line-height:1; padding:0;
+    box-shadow:0 3px 10px rgba(0,0,0,0.28); cursor:pointer; z-index:20;
+    display:flex; align-items:center; justify-content:center; }
+
+  .fab-menu-backdrop { position:absolute; inset:0; background:rgba(0,0,0,0.35); z-index:40; }
+  .fab-menu { position:absolute; bottom:86px; right:18px; display:flex; flex-direction:column;
+    align-items:flex-end; gap:10px; z-index:50; }
+  .fab-pill { display:flex; align-items:center; gap:10px; background:var(--surface); border:1px solid var(--border);
+    border-radius:999px; padding:11px 18px; font-size:14.5px; font-weight:600; color:var(--text);
+    box-shadow:0 3px 10px rgba(0,0,0,0.25); cursor:pointer; white-space:nowrap; }
+  .fab-pill-icon { font-size:15px; }
+  .fab-close-btn { width:52px; height:52px; border-radius:50%; background:var(--surface); border:1px solid var(--border);
+    display:flex; align-items:center; justify-content:center; font-size:22px; color:var(--text);
+    box-shadow:0 3px 10px rgba(0,0,0,0.25); cursor:pointer; }
+
+  .empty { padding:70px 30px; text-align:center; color:var(--text-dim); font-size:14px; line-height:1.6; }
+
+  .section-label { font-size:12px; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-dim); margin:20px 0 8px; }
+  .field-hint { font-size:12.5px; color:var(--text-dim); margin:4px 0 0; line-height:1.4; }
+  input[type=text], input[type=number], select, textarea {
+    width:100%; background:var(--surface); border:1px solid var(--border); border-radius:8px;
+    padding:9px 11px; color:var(--text); font-family:inherit; font-size:14.5px; outline:none;
+  }
+  textarea { resize:vertical; min-height:140px; line-height:1.5; }
+
+  .row-flex { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .swatches { display:flex; gap:8px; flex-wrap:wrap; margin-top:4px; }
+  .swatch { width:30px; height:30px; border-radius:50%; border:2px solid transparent; cursor:pointer; }
+  .swatch.selected { border-color:var(--text); }
+
+  .switch { position:relative; width:44px; height:26px; flex-shrink:0; }
+  .switch input { opacity:0; width:0; height:0; }
+  .slider { position:absolute; inset:0; background:var(--border); border-radius:999px; cursor:pointer; transition:0.15s; }
+  .slider::before { content:""; position:absolute; width:20px; height:20px; left:3px; top:3px;
+    background:var(--surface); border-radius:50%; transition:0.15s; box-shadow:0 1px 2px rgba(0,0,0,0.3); }
+  input:checked + .slider { background:var(--accent); }
+  input:checked + .slider::before { transform:translateX(18px); }
+
+  .btn { display:inline-block; border:none; border-radius:8px; padding:10px 14px; font-size:14px;
+    font-weight:600; cursor:pointer; font-family:inherit; }
+  .btn-primary { background:var(--accent); color:#202124; }
+  .btn-ghost { background:var(--surface); color:var(--text); border:1px solid var(--border); }
+  .btn-danger { background:none; color:var(--danger); border:1px solid var(--danger); }
+  .btn-sm { padding:6px 10px; font-size:12.5px; }
+  .btn-row { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
+
+  .note-row-item { display:flex; align-items:center; justify-content:space-between; gap:8px;
+    padding:9px 0; border-bottom:1px solid var(--border); }
+  .note-row-item .snippet { font-size:13.5px; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+  .drag-handle { touch-action:none; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
+    cursor:grab; color:var(--text-dim); font-size:16px; line-height:1; flex-shrink:0; padding:6px; }
+  .settings-menu-row { display:flex; align-items:center; justify-content:space-between; gap:8px;
+    padding:18px 4px; border-bottom:1px solid var(--border); font-size:17px; cursor:pointer; }
+  .settings-menu-row .snippet { font-size:17px; }
+
+  .cat-name-suggest { position:absolute; top:calc(100% + 2px); left:0; right:0; z-index:40;
+    background:var(--surface); border:1px solid var(--border); border-radius:8px;
+    max-height:180px; overflow-y:auto; box-shadow:0 4px 14px rgba(0,0,0,0.2); }
+  .cat-name-suggest-item { padding:11px 13px; font-size:14.5px; }
+  .cat-name-suggest-item:active { background:var(--bg); }
+
+  .cat-row { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 0; border-bottom:1px solid var(--border); }
+  .cat-dot { width:14px; height:14px; border-radius:50%; flex-shrink:0; }
+  .cat-name { flex:1; font-size:14px; }
+
+  .chip-row { display:flex; gap:6px; flex-wrap:wrap; margin:10px 0; }
+  .chip { border-radius:999px; padding:6px 12px; font-size:12.5px; border:1px solid var(--border);
+    cursor:pointer; background:var(--surface); color:var(--text); }
+
+  .tag-span { border-radius:4px; padding:0 3px; }
+
+  .status-line { margin-top:16px; padding:9px 12px; border-radius:8px; background:rgba(249,171,0,0.18); font-size:13px; }
+
+  .rule-card { border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:10px; background:var(--surface); }
+  .rule-grid { display:flex; flex-wrap:wrap; gap:8px; }
+  .rule-grid > * { flex:1; min-width:110px; }
+
+  .editor-wrap { flex:1; display:flex; flex-direction:column; padding:8px 20px 24px; overflow-y:auto; }
+  .title-input { border:none !important; background:transparent !important; box-shadow:none !important;
+    font-size:24px; font-weight:700; padding:8px 0 !important; flex-shrink:0; }
+  .title-input:focus { outline:none; }
+  .body-textarea { border:none !important; background:transparent !important;
+    font-size:16.5px; font-weight:400; line-height:1.65; flex:1; min-height:180px; padding:8px 0 !important; resize:none;
+    font-family:inherit; white-space:pre-wrap; word-wrap:break-word; letter-spacing:normal; }
+  .body-textarea:focus { outline:none; }
+  .body-editor-wrap { position:relative; flex:1; min-height:180px; }
+  .body-highlight-overlay { position:absolute; inset:0; pointer-events:none; overflow-y:auto;
+    white-space:pre-wrap; word-wrap:break-word; font-size:16.5px; font-weight:400; line-height:1.65;
+    padding:8px 0; color:var(--text); font-family:inherit; }
+  .body-textarea.with-overlay { position:absolute; inset:0; color:transparent !important; caret-color:var(--text); }
+  .editor-extra { flex-shrink:0; }
+  .forced-badge { display:inline-block; font-size:11.5px; background:rgba(249,171,0,0.25); padding:3px 9px;
+    border-radius:999px; margin-bottom:10px; }
+
+  .list-items-wrap { flex:1; overflow-y:auto; margin-top:8px; }
+  .list-item-row { display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--border); }
+  .list-item-num { font-weight:700; cursor:pointer; min-width:26px; color:var(--accent); user-select:none; }
+  .list-item-text { flex:1; border:none !important; background:transparent !important; font-size:15px; padding:4px 0 !important; }
+
+  #global-toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(10px);
+    background:#202124; color:#fff; padding:9px 16px; border-radius:20px; font-size:13px;
+    opacity:0; pointer-events:none; transition:0.2s; z-index:999; }
+  #global-toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  #confirm-dialog { position:fixed; inset:0; z-index:10000; display:none; align-items:center; justify-content:center; }
+  #confirm-dialog.show { display:flex; }
+  .confirm-backdrop { position:absolute; inset:0; background:rgba(0,0,0,0.5); }
+  .confirm-box { position:relative; background:var(--surface); border-radius:14px; padding:20px;
+    max-width:300px; width:85%; box-shadow:0 10px 30px rgba(0,0,0,0.35); }
+  .confirm-message { font-size:15px; margin-bottom:16px; color:var(--text); }
+  .confirm-actions { display:flex; justify-content:flex-end; gap:10px; }
+  #dial-overlay { position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+    pointer-events:none; z-index:9999; opacity:0; transition:opacity 0.12s; }
+  #dial-overlay.show { opacity:1; }
+  .dial-value { background:rgba(0,0,0,0.78); color:#fff; font-size:38px; font-weight:700;
+    padding:22px 40px; border-radius:18px; text-align:center; min-width:100px; letter-spacing:2px; }
+  .dial-active-digit { color:var(--accent); text-decoration:underline; text-decoration-thickness:3px; text-underline-offset:4px; }
+  .dial-placeholder-digit { opacity:0.35; }
+  .dial-edge-zone { position:fixed; top:56px; bottom:0; width:40px; z-index:8000;
+    background:transparent; touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
+  .dial-edge-left { left:0; }
+  .dial-edge-right { right:0; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(function () {
+  var STORAGE_KEY = "keep_force_state_v8";
+  var TRICK_COLORS = ["#FFFFFF","#F28B82","#FBBC04","#FFF475","#CCFF90","#A7FFEB","#CBF0F8","#AECBFA","#D7AEFB"];
+  var CATEGORY_PALETTE = ["#AECBFA","#CBF0F8","#D7AEFB","#CCFF90","#FDCFE8","#FFF475","#F28B82","#A7FFEB"];
+
+  function uid(p) { return p + "_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+  function isGroupId(id) { return typeof id === "string" && id.indexOf("grp_") === 0; }
+  function duplicateGroupDeep(g) {
+    var copy = JSON.parse(JSON.stringify(g));
+    copy.id = uid("grp");
+    (copy.categories || []).forEach(function (c) { c.id = uid("cat"); });
+    copy.notes = (copy.notes || []).map(function (n) {
+      n.id = uid("note");
+      if (n.type === "list") (n.items || []).forEach(function (it) { it.id = uid("item"); });
+      return n;
+    });
+    return copy;
+  }
+
+  function defaultState() { return { mode: "note", groups: [], notes: [], homeOrder: [], pools: [], dialSettings: { inputMode: "auto", haptics: true, cycleSpeedMs: 650, hapticStrength: 15, invertDrag: false, holdMs: 320, enabled: true } }; }
+
+  function migrateNote(n) {
+    if (!n.type) n.type = "text";
+    if (typeof n.title !== "string") n.title = "";
+    if (!Array.isArray(n.images)) n.images = [];
+    if (n.type === "text") {
+      if (typeof n.rawText !== "string") n.rawText = "";
+      if (!Array.isArray(n.tags)) n.tags = [];
+    } else if (n.type === "list") {
+      if (!Array.isArray(n.items)) n.items = [];
+      if (!n.items.length) n.items.push({ id: uid("item"), text: "", done: false });
+      if (!n.listForce || typeof n.listForce !== "object") n.listForce = { armed: false, word: "" };
+      if (typeof n.listForce.armed !== "boolean") n.listForce.armed = false;
+      if (typeof n.listForce.word !== "string") n.listForce.word = "";
+    } else if (n.type === "drawing") {
+      if (typeof n.drawingData === "undefined") n.drawingData = null;
+    }
+  }
+
+  function loadState() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return defaultState();
+      var p = JSON.parse(raw);
+      var groups = Array.isArray(p.groups) ? p.groups : [];
+      groups.forEach(function (g) {
+        if (typeof g.previewRows !== "number") g.previewRows = 3;
+        if (!g.force) g.force = { armed: false };
+        if (!Array.isArray(g.categories)) g.categories = [];
+        g.categories.forEach(function (c) {
+          if (typeof c.poolId === "undefined") c.poolId = null;
+          if (typeof c.word !== "string") c.word = "";
+          if (typeof c.triggerCount !== "number") c.triggerCount = 1;
+          if (typeof c.replaceAll !== "boolean") c.replaceAll = false;
+        });
+        if (Array.isArray(g.force.rules)) {
+          g.force.rules.forEach(function (r) {
+            var cat = g.categories.find(function (c) { return c.id === r.categoryId; });
+            if (cat) {
+              cat.word = r.word || cat.word || "";
+              cat.triggerCount = r.triggerCount || cat.triggerCount || 1;
+              cat.replaceAll = !!r.replaceAll;
+            }
+          });
+          delete g.force.rules;
+        }
+        (g.notes || []).forEach(migrateNote);
+      });
+      var notes = Array.isArray(p.notes) ? p.notes : [];
+      notes.forEach(migrateNote);
+      var homeOrder = Array.isArray(p.homeOrder) ? p.homeOrder : [];
+      var pools = Array.isArray(p.pools) ? p.pools : [];
+      pools.forEach(function (pl) {
+        if (!Array.isArray(pl.values)) pl.values = [];
+        if (Array.isArray(pl.columns)) pl.columns.forEach(function (c) { if (!Array.isArray(c.values)) c.values = []; });
+      });
+      var dialSettings = (p.dialSettings && typeof p.dialSettings === "object") ? p.dialSettings : {};
+      if (dialSettings.inputMode !== "auto" && dialSettings.inputMode !== "drag") dialSettings.inputMode = "auto";
+      if (typeof dialSettings.haptics !== "boolean") dialSettings.haptics = true;
+      if (typeof dialSettings.cycleSpeedMs !== "number") dialSettings.cycleSpeedMs = 650;
+      if (typeof dialSettings.hapticStrength !== "number") dialSettings.hapticStrength = 15;
+      if (typeof dialSettings.invertDrag !== "boolean") dialSettings.invertDrag = false;
+      if (typeof dialSettings.holdMs !== "number") dialSettings.holdMs = 320;
+      if (typeof dialSettings.enabled !== "boolean") dialSettings.enabled = true;
+      return { mode: (p.mode === "magic") ? "magic" : "note", groups: groups, notes: notes, homeOrder: homeOrder, pools: pools, dialSettings: dialSettings };
+    } catch (e) { return defaultState(); }
+  }
+  function saveState() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {} }
+
+  var state = loadState();
+  var route = "home";
+  var currentGroupId = null, currentNoteId = null, currentPoolId = null, exportScreenGroupId = null;
+  var lastActiveGroupId = null; // last trick visited, kept even after backing out to Home — lets the title's lock-tell survive the trip back
+  var navStack = [];
+  var editorUseForceOverlay = false;
+  var sessionCounts = {};   // groupId -> number of notes opened this visit
+  var sessionForced = {};   // groupId -> { noteId: { rules, overrideText } } persists until group exit
+  var dialLockedGroups = {}; // groupId -> true once a force has actually been shown within this trick visit; the
+                              // dial goes inert (silently, no toast) for the rest of the visit and clears on re-entry
+  function groupDialLocked(groupId) { return !!(groupId && dialLockedGroups[groupId]); }
+  function dialTellLocked() { return !dialIsEnabled() || groupDialLocked(lastActiveGroupId); } // the title dot goes inert-grey whenever the dial itself won't respond — off, or locked after a force
+  var lastSelStart = 0, lastSelEnd = 0;
+  var fabMenuOpen = false, fabMenuGroupId = null;
+  var poolFabMenuOpen = false;
+  var noteMenuOpen = false, noteMenuTarget = null, moveMenuOpen = false;
+  var homeSearchQuery = "";
+  var focusItemIdAfterRender = null, focusItemCaretEnd = false;
+  var dialDemoPoolId = null, dialDemoValue = "";
+  var dialedPoolValue = {}; // groupId -> currently loaded pool value for that trick's dial (resets on entering the group)
+  var noteWordOverride = {}; // noteId -> live dial override for that note's one dial-able tagged word (resets on entering the note)
+  var multiSelectActive = false, multiSelectIds = {}, multiSelectContext = null; // context: null = Home standalone notes, or a groupId
+  var reorderModeActive = false, reorderModeContext = null; // same context convention as multiSelectContext; whole-card drag, no tap/long-press
+  var moveMenuBatchMode = false;
+  var listForceDigits = {};       // noteId -> digits chosen so far this visit, e.g. [4] mid-entry
+  var listForceTarget = {};       // noteId -> resolved target position (1-based), once fully dialed
+  var listForceOverrideText = {}; // noteId -> live edit made to the forced row this visit (never touches real data)
+
+  // Digit-by-digit range for List Force: which digits are valid for the NEXT
+  // position given the digits already chosen and the list's real length.
+  // e.g. max=47: first digit offers 0-4; if that digit was 4, second offers 0-7.
+  function digitOptionsForPosition(max, digitsSoFar) {
+    var totalDigits = String(max).length;
+    var digitIndex = digitsSoFar.length;
+    if (digitIndex >= totalDigits) return [];
+    var remainingAfter = totalDigits - digitIndex - 1;
+    var prefixValue = digitsSoFar.reduce(function (acc, d) { return acc * 10 + d; }, 0);
+    var options = [];
+    for (var d = 0; d <= 9; d++) {
+      var candidatePrefix = prefixValue * 10 + d;
+      var minCompletion = candidatePrefix * Math.pow(10, remainingAfter);
+      if (minCompletion <= max) options.push(d);
+    }
+    return options;
+  }
+  function armListForceDial(note) {
+    if (groupDialLocked(currentGroupId)) { dialClearSession(); return; }
+    var max = note.items.length;
+    if (max < 1) { dialClearSession(); return; }
+    var lockKey = "list_" + note.id;
+    var totalDigits = String(max).length;
+    dialSetSession(function () {
+      var options = digitOptionsForPosition(max, listForceDigits[note.id] || []);
+      return options.length ? options : [0];
+    }, function (chosenDigit) {
+      var digitsSoFar = (listForceDigits[note.id] || []).slice();
+      digitsSoFar.push(chosenDigit);
+      if (digitsSoFar.length >= totalDigits) {
+        var num = digitsSoFar.reduce(function (acc, d) { return acc * 10 + d; }, 0);
+        listForceDigits[note.id] = [];
+        if (num >= 1 && num <= max) {
+          listForceTarget[note.id] = num;
+          listForceOverrideText[note.id] = null;
+          if (currentGroupId) dialLockedGroups[currentGroupId] = true; // the force has been shown — dial goes inert until this trick is re-entered
+          if (isMagic()) showToast("Target set: #" + num);
+        } else if (isMagic()) {
+          showToast("That number doesn't land on a real position \u2014 try again");
+        }
+      } else {
+        listForceDigits[note.id] = digitsSoFar;
+        if (isMagic()) showToast("Digit " + digitsSoFar.length + " of " + totalDigits + " set");
+      }
+      render();
+    }, lockKey, function (candidateDigit) {
+      var digitsSoFar = listForceDigits[note.id] || [];
+      var chars = [];
+      for (var i = 0; i < totalDigits; i++) {
+        if (i < digitsSoFar.length) chars.push(esc(String(digitsSoFar[i])));
+        else if (i === digitsSoFar.length) chars.push('<span class="dial-active-digit">' + esc(String(candidateDigit)) + '</span>');
+        else chars.push('<span class="dial-placeholder-digit">\u2022</span>');
+      }
+      return chars.join("");
+    });
+  }
+
+  var columnDialProgress = {}; // sessionKey -> values chosen so far, for multi-column pools
+  // Dials a pool one column at a time (each column its own fresh edge-hold),
+  // joining the chosen values into one final string. Flat (single-column)
+  // pools fall through to the plain single-hold dial, unchanged.
+  function armPoolColumnDial(pool, sessionKey, onFullValue) {
+    if (!pool.columns || pool.columns.length < 2) {
+      dialSetSession(function () {
+        var vals = pool.values || [];
+        return vals.length ? vals : ["(pool is empty)"];
+      }, function (val) { onFullValue(val); }, sessionKey);
+      return;
+    }
+    var totalCols = pool.columns.length;
+    dialSetSession(function () {
+      var progress = columnDialProgress[sessionKey] || [];
+      var col = pool.columns[progress.length] || pool.columns[0];
+      var vals = col.values || [];
+      return vals.length ? vals : ["(empty)"];
+    }, function (chosenVal) {
+      var progress = (columnDialProgress[sessionKey] || []).slice();
+      progress.push(chosenVal);
+      if (progress.length >= totalCols) {
+        var sep = (typeof pool.columnSeparator === "string") ? pool.columnSeparator : " ";
+        var assembled = progress.join(sep);
+        columnDialProgress[sessionKey] = [];
+        if (isMagic()) showToast("Set: " + assembled);
+        onFullValue(assembled);
+      } else {
+        columnDialProgress[sessionKey] = progress;
+        if (isMagic()) showToast("Column " + progress.length + " of " + totalCols + " set");
+      }
+      render();
+    }, sessionKey, function (candidateVal) {
+      var progress = columnDialProgress[sessionKey] || [];
+      var sep = (typeof pool.columnSeparator === "string") ? pool.columnSeparator : " ";
+      var parts = progress.map(function (v) { return esc(v); });
+      parts.push('<span class="dial-active-digit">' + esc(candidateVal) + '</span>');
+      for (var i = progress.length + 1; i < totalCols; i++) parts.push('<span class="dial-placeholder-digit">\u2022</span>');
+      return parts.join(esc(sep));
+    });
+  }
+
+  function esc(s) { return String(s == null ? "" : s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  function isMagic() { return state.mode === "magic"; }
+
+  function findGroup(id) { return state.groups.find(function (g) { return g.id === id; }); }
+  function findNoteInGroup(group, id) { return group.notes.find(function (n) { return n.id === id; }); }
+  function findStandaloneNote(id) { return state.notes.find(function (n) { return n.id === id; }); }
+  function getNote(groupId, noteId) { return groupId ? findNoteInGroup(findGroup(groupId), noteId) : findStandaloneNote(noteId); }
+  function findCategoryInGroup(group, id) { return (group.categories || []).find(function (c) { return c.id === id; }); }
+  function addCategoryToGroup(group) {
+    var color = CATEGORY_PALETTE[group.categories.length % CATEGORY_PALETTE.length];
+    var cat = { id: uid("cat"), name: "", color: color, poolId: null, word: "", triggerCount: 1, replaceAll: false };
+    group.categories.push(cat);
+    saveState();
+    return cat;
+  }
+  function deleteCategoryFromGroup(group, id) {
+    group.categories = group.categories.filter(function (c) { return c.id !== id; });
+    group.notes.forEach(function (n) { if (n.tags) n.tags = n.tags.filter(function (t) { return t.categoryId !== id; }); });
+    saveState();
+  }
+  // ---- global pools ----
+  function findPool(id) { return state.pools.find(function (p) { return p.id === id; }); }
+  function poolAllValues(pool) {
+    if (pool.columns && pool.columns.length) {
+      return pool.columns.reduce(function (acc, c) { return acc.concat(c.values || []); }, []);
+    }
+    return pool.values || [];
+  }
+  // For matching/tagging: a multi-column pool's dial-able unit is the whole
+  // joined phrase (e.g. "Queen Hearts"), not each column's value on its own —
+  // tagging columns independently is what caused the double-force bug.
+  function poolCombinedValues(pool) {
+    if (!pool.columns || pool.columns.length < 2) return pool.values || [];
+    var sep = (typeof pool.columnSeparator === "string") ? pool.columnSeparator : " ";
+    var combos = [""];
+    pool.columns.forEach(function (col) {
+      var vals = (col.values && col.values.length) ? col.values : [""];
+      var next = [];
+      combos.forEach(function (prefix) {
+        vals.forEach(function (v) { next.push(prefix ? (prefix + sep + v) : v); });
+      });
+      combos = next;
+    });
+    return combos;
+  }
+  function poolValueConflict(poolId, value) {
+    var norm = value.trim().toLowerCase();
+    var found = null;
+    state.pools.forEach(function (p) {
+      if (p.id === poolId) return;
+      if (poolAllValues(p).some(function (v) { return v.toLowerCase() === norm; })) found = p;
+    });
+    return found;
+  }
+  function groupPoolLinkedCategory(group) {
+    return group.categories.find(function (c) { return c.poolId; });
+  }
+  // The one tagged word in this note (if any) that belongs to the group's
+  // pool-linked category — earliest occurrence wins if there's more than one.
+  function noteDialTag(note, group) {
+    var tags = (note.tags || []).filter(function (t) {
+      if (t.poolId) return true; // standalone-style tag: references a pool directly, no category needed
+      var cat = group ? findCategoryInGroup(group, t.categoryId) : null;
+      return !!(cat && cat.poolId);
+    }).sort(function (a, b) { return a.start - b.start; });
+    return tags.length ? tags[0] : null;
+  }
+  function tagPool(tag, group) {
+    if (tag.poolId) return findPool(tag.poolId);
+    if (group) { var cat = findCategoryInGroup(group, tag.categoryId); if (cat) return findPool(cat.poolId); }
+    return null;
+  }
+  function applyNoteWordOverride(rawText, tag, overrideValue) {
+    if (!tag || overrideValue == null) return rawText;
+    return rawText.slice(0, tag.start) + overrideValue + rawText.slice(tag.end);
+  }
+  function linkPoolToCategory(group, category, poolId) {
+    if (poolId) {
+      var conflict = group.categories.find(function (c) { return c.id !== category.id && c.poolId; });
+      if (conflict) return { ok: false, conflictName: conflict.name };
+    }
+    category.poolId = poolId || null;
+    saveState();
+    return { ok: true };
+  }
+  function deletePool(id) {
+    state.pools = state.pools.filter(function (p) { return p.id !== id; });
+    state.groups.forEach(function (g) {
+      (g.categories || []).forEach(function (c) { if (c.poolId === id) c.poolId = null; });
+    });
+    saveState();
+  }
+  function makeNote(type) {
+    var n = { id: uid("note"), type: type, title: "", images: [] };
+    if (type === "list") { n.items = [{ id: uid("item"), text: "", done: false }]; n.listForce = { armed: false, word: "" }; }
+    else if (type === "drawing") n.drawingData = null;
+    else { n.rawText = ""; n.tags = []; }
+    return n;
+  }
+
+  // ---- Home ordering across mixed groups + standalone notes ----
+  function homeOrderEnsure() {
+    if (!Array.isArray(state.homeOrder)) state.homeOrder = [];
+    var known = {};
+    state.homeOrder.forEach(function (e) { known[e.kind + ":" + e.id] = true; });
+    state.groups.forEach(function (g) { if (!known["group:" + g.id]) state.homeOrder.push({ kind: "group", id: g.id }); });
+    state.notes.forEach(function (n) { if (!known["note:" + n.id]) state.homeOrder.push({ kind: "note", id: n.id }); });
+    var groupIds = {}; state.groups.forEach(function (g) { groupIds[g.id] = true; });
+    var noteIds = {}; state.notes.forEach(function (n) { noteIds[n.id] = true; });
+    state.homeOrder = state.homeOrder.filter(function (e) { return e.kind === "group" ? groupIds[e.id] : noteIds[e.id]; });
+  }
+  function reorderHome(draggedKindId, targetKindId) {
+    homeOrderEnsure();
+    var fromIdx = state.homeOrder.findIndex(function (e) { return (e.kind + ":" + e.id) === draggedKindId; });
+    var toIdx = state.homeOrder.findIndex(function (e) { return (e.kind + ":" + e.id) === targetKindId; });
+    if (fromIdx < 0 || toIdx < 0) return;
+    var item = state.homeOrder.splice(fromIdx, 1)[0];
+    state.homeOrder.splice(toIdx, 0, item);
+    saveState(); render();
+  }
+  function reorderGroupNotes(groupId, draggedId, targetId) {
+    var group = findGroup(groupId);
+    var fromIdx = group.notes.findIndex(function (n) { return n.id === draggedId; });
+    var toIdx = group.notes.findIndex(function (n) { return n.id === targetId; });
+    if (fromIdx < 0 || toIdx < 0) return;
+    var item = group.notes.splice(fromIdx, 1)[0];
+    group.notes.splice(toIdx, 0, item);
+    saveState(); render();
+  }
+  function reorderGroupCategories(groupId, draggedDragId, targetDragId) {
+    var group = findGroup(groupId);
+    var draggedId = draggedDragId.replace(/^cat:/, ""), targetId = targetDragId.replace(/^cat:/, "");
+    var fromIdx = group.categories.findIndex(function (c) { return c.id === draggedId; });
+    var toIdx = group.categories.findIndex(function (c) { return c.id === targetId; });
+    if (fromIdx < 0 || toIdx < 0) return;
+    var item = group.categories.splice(fromIdx, 1)[0];
+    group.categories.splice(toIdx, 0, item);
+    saveState(); render();
+  }
+  function reorderPoolValues(pool, draggedDragId, targetDragId) {
+    var fromIdx = parseInt(draggedDragId.split(":")[1], 10);
+    var toIdx = parseInt(targetDragId.split(":")[1], 10);
+    if (isNaN(fromIdx) || isNaN(toIdx) || fromIdx === toIdx) return;
+    var item = pool.values.splice(fromIdx, 1)[0];
+    pool.values.splice(toIdx, 0, item);
+    saveState(); render();
+  }
+  function reorderPoolColumnValues(pool, draggedDragId, targetDragId) {
+    var dParts = draggedDragId.split(":"), tParts = targetDragId.split(":");
+    var dCi = parseInt(dParts[1], 10), dVi = parseInt(dParts[2], 10);
+    var tCi = parseInt(tParts[1], 10), tVi = parseInt(tParts[2], 10);
+    if (dCi !== tCi || isNaN(dVi) || isNaN(tVi) || dVi === tVi) return;
+    var col = pool.columns[dCi];
+    var item = col.values.splice(dVi, 1)[0];
+    col.values.splice(tVi, 0, item);
+    saveState(); render();
+  }
+
+  // ---- tokens / rendering of tagged text (text notes only) ----
+  function buildTokens(note) {
+    var tags = (note.tags || []).slice().sort(function (a, b) { return a.start - b.start; });
+    var tokens = [], pos = 0;
+    tags.forEach(function (tg) {
+      if (tg.start > pos) tokens.push({ type: "text", value: note.rawText.slice(pos, tg.start) });
+      tokens.push({ type: "tag", categoryId: tg.categoryId, value: note.rawText.slice(tg.start, tg.end), start: tg.start, end: tg.end });
+      pos = tg.end;
+    });
+    if (pos < note.rawText.length) tokens.push({ type: "text", value: note.rawText.slice(pos) });
+    return tokens;
+  }
+  function plainText(tokens) { return tokens.map(function (t) { return t.value; }).join(""); }
+  function forcedTextMulti(tokens, rules) {
+    var usedFirst = {};
+    return tokens.map(function (t) {
+      if (t.type === "tag") {
+        var rule = rules.find(function (r) { return r.categoryId === t.categoryId; });
+        if (rule) {
+          if (rule.replaceAll) return rule.word;
+          if (!usedFirst[rule.categoryId]) { usedFirst[rule.categoryId] = true; return rule.word; }
+        }
+      }
+      return t.value;
+    }).join("");
+  }
+
+  // ---- diff-based tag preservation on edit ----
+  function diffEdit(oldStr, newStr) {
+    var minLen = Math.min(oldStr.length, newStr.length);
+    var prefix = 0;
+    while (prefix < minLen && oldStr.charCodeAt(prefix) === newStr.charCodeAt(prefix)) prefix++;
+    var suffix = 0;
+    var maxSuffix = minLen - prefix;
+    while (suffix < maxSuffix && oldStr.charCodeAt(oldStr.length - 1 - suffix) === newStr.charCodeAt(newStr.length - 1 - suffix)) suffix++;
+    return { start: prefix, oldEnd: oldStr.length - suffix, newEnd: newStr.length - suffix };
+  }
+  function adjustTagsForEdit(tags, edit) {
+    var delta = edit.newEnd - edit.oldEnd;
+    var result = [];
+    tags.forEach(function (t) {
+      if (t.end <= edit.start) { result.push(t); return; }
+      if (t.start >= edit.oldEnd) { result.push({ start: t.start + delta, end: t.end + delta, categoryId: t.categoryId }); return; }
+      if (edit.start >= t.start && edit.oldEnd <= t.end) {
+        var newEnd = t.end + delta;
+        if (newEnd > t.start) result.push({ start: t.start, end: newEnd, categoryId: t.categoryId });
+        return;
+      }
+    });
+    return result;
+  }
+  // If the group has a pool-linked category, typing one of its values anywhere
+  // in the note auto-tags it (first untagged, whole-word match) — no manual
+  // select-and-tap needed for pool words specifically.
+  function autoTagPoolWords(group, note) {
+    if (!group) return;
+    var cat = groupPoolLinkedCategory(group);
+    if (!cat) return;
+    var pool = findPool(cat.poolId);
+    var poolValues = pool ? poolCombinedValues(pool) : [];
+    if (!pool || !poolValues.length) return;
+    var text = note.rawText;
+    note.tags = note.tags || [];
+    function overlapsExisting(start, end) {
+      return note.tags.some(function (t) { return !(end <= t.start || start >= t.end); });
+    }
+    function isWordChar(ch) { return !!ch && /[a-z0-9]/i.test(ch); }
+    poolValues.forEach(function (val) {
+      var alreadyTaggedHere = note.tags.some(function (t) {
+        return t.categoryId === cat.id && text.slice(t.start, t.end).toLowerCase() === val.toLowerCase();
+      });
+      if (alreadyTaggedHere) return;
+      var lowerText = text.toLowerCase(), lowerVal = val.toLowerCase();
+      var idx = lowerText.indexOf(lowerVal);
+      while (idx !== -1) {
+        var end = idx + val.length;
+        if (!isWordChar(text[idx - 1]) && !isWordChar(text[end]) && !overlapsExisting(idx, end)) {
+          note.tags.push({ start: idx, end: end, categoryId: cat.id });
+          return;
+        }
+        idx = lowerText.indexOf(lowerVal, idx + 1);
+      }
+    });
+  }
+  // Standalone notes have no group/category — scan every pool that exists
+  // instead of just the one linked to a trick, tagging directly by poolId.
+  function autoTagGlobalPoolWords(note) {
+    var text = note.rawText;
+    note.tags = note.tags || [];
+    function overlapsExisting(start, end) {
+      return note.tags.some(function (t) { return !(end <= t.start || start >= t.end); });
+    }
+    function isWordChar(ch) { return !!ch && /[a-z0-9]/i.test(ch); }
+    var lowerText = text.toLowerCase();
+    state.pools.forEach(function (pool) {
+      poolCombinedValues(pool).forEach(function (val) {
+        var alreadyTaggedHere = note.tags.some(function (t) {
+          return t.poolId === pool.id && text.slice(t.start, t.end).toLowerCase() === val.toLowerCase();
+        });
+        if (alreadyTaggedHere) return;
+        var lowerVal = val.toLowerCase();
+        var idx = lowerText.indexOf(lowerVal);
+        while (idx !== -1) {
+          var end = idx + val.length;
+          if (!isWordChar(text[idx - 1]) && !isWordChar(text[end]) && !overlapsExisting(idx, end)) {
+            note.tags.push({ start: idx, end: end, poolId: pool.id });
+            return;
+          }
+          idx = lowerText.indexOf(lowerVal, idx + 1);
+        }
+      });
+    });
+  }
+
+  function categoryCoverage(group, categoryId) {
+    if (!categoryId) return null;
+    var textNotes = group.notes.filter(function (n) { return n.type === "text"; });
+    var total = textNotes.length, has = 0;
+    textNotes.forEach(function (n) {
+      if ((n.tags || []).some(function (t) { return t.categoryId === categoryId; })) has++;
+    });
+    return { has: has, total: total };
+  }
+  function groupHasRules(group) {
+    return (group.categories || []).some(function (c) { return c.poolId || (c.word && c.word.trim()); });
+  }
+  function groupPreviewText(group) {
+    if (!group.notes.length) return "";
+    var n = group.notes[0];
+    if (n.type === "text") return plainText(buildTokens(n));
+    if (n.type === "list") return (n.items || []).map(function (it) { return it.text; }).filter(Boolean).join(", ");
+    if (n.type === "drawing") return n.drawingData ? "\u270F\uFE0F Drawing" : "";
+    return "";
+  }
+  // A text note "counts" for forcing if it has a tag belonging to a category
+  // that's actually configured to force something (trick context), or any tag
+  // at all (standalone, where the individual-note dial is what matters). No
+  // categories configured to force anything yet means nothing to warn about.
+  function noteHasForceableTag(note, group) {
+    if (note.type !== "text") return true;
+    var tags = note.tags || [];
+    if (!group) return tags.length > 0;
+    var activeCatIds = {};
+    (group.categories || []).forEach(function (c) { if (c.poolId || (c.word && c.word.trim())) activeCatIds[c.id] = true; });
+    if (!Object.keys(activeCatIds).length) return true;
+    return tags.some(function (t) { return activeCatIds[t.categoryId]; });
+  }
+  function noteCardHtml(note, previewRows, dataAttrs, selected, needsForceRing, reorderMode) {
+    var titleHtml = note.title ? '<div class="card-title">' + esc(note.title) + '</div>' : "";
+    var photoHtml = (note.images && note.images.length)
+      ? '<img src="' + note.images[0].dataUrl + '" style="width:100%;max-height:100px;object-fit:cover;border-radius:6px;display:block;margin-bottom:6px;">'
+      : "";
+    var bodyHtml;
+    if (note.type === "list") {
+      var lines = (note.items || []).slice(0, previewRows).map(function (it, idx) {
+        var style = it.done ? "text-decoration:line-through;opacity:0.55;" : "";
+        return '<div style="display:flex;gap:6px;' + style + '"><span style="font-weight:700;color:var(--accent);flex-shrink:0;">' + (idx + 1) + '.</span><span>' + esc(it.text || "(empty)") + '</span></div>';
+      }).join("");
+      bodyHtml = lines ? '<div class="card-preview">' + lines + '</div>' : '<div class="card-preview">(empty list)</div>';
+    } else if (note.type === "drawing") {
+      bodyHtml = note.drawingData
+        ? '<img src="' + note.drawingData + '" style="max-width:100%;border-radius:6px;display:block;">'
+        : '<div class="card-preview">\u270F\uFE0F Drawing</div>';
+    } else {
+      var bodyText = plainText(buildTokens(note));
+      bodyHtml = bodyText
+        ? '<div class="card-preview" style="-webkit-line-clamp:' + previewRows + ';display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden;">' + esc(bodyText) + '</div>'
+        : (note.title ? "" : '<div class="card-preview">(empty)</div>');
+    }
+    var selClass = selected ? " card-selected" : "";
+    var ringClass = (!selected && needsForceRing) ? " card-no-force" : "";
+    var reorderClass = reorderMode ? " card-reorder-mode" : "";
+    var checkHtml = selected ? '<div class="card-select-check">\u2713</div>' : "";
+    return '<div class="card' + selClass + ringClass + reorderClass + '" ' + dataAttrs + '>' + checkHtml + photoHtml + titleHtml + bodyHtml + '</div>';
+  }
+
+  function ensureToast() {
+    if (!document.getElementById("global-toast")) {
+      var d = document.createElement("div"); d.id = "global-toast";
+      document.body.appendChild(d);
+    }
+  }
+  function showToast(msg) {
+    ensureToast();
+    var d = document.getElementById("global-toast");
+    d.textContent = msg; d.classList.add("show");
+    clearTimeout(d._t); d._t = setTimeout(function () { d.classList.remove("show"); }, 1700);
+  }
+
+  var confirmOnOk = null;
+  function ensureConfirmDialog() {
+    if (document.getElementById("confirm-dialog")) return;
+    var el = document.createElement("div");
+    el.id = "confirm-dialog";
+    el.innerHTML =
+      '<div class="confirm-backdrop" id="confirm-backdrop"></div>' +
+      '<div class="confirm-box">' +
+        '<div class="confirm-message" id="confirm-message"></div>' +
+        '<div class="confirm-actions">' +
+          '<button class="btn btn-ghost" id="confirm-cancel-btn">Cancel</button>' +
+          '<button class="btn btn-danger" id="confirm-ok-btn">Delete</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(el);
+    document.getElementById("confirm-backdrop").addEventListener("click", hideConfirm);
+    document.getElementById("confirm-cancel-btn").addEventListener("click", hideConfirm);
+    document.getElementById("confirm-ok-btn").addEventListener("click", function () {
+      var cb = confirmOnOk;
+      hideConfirm();
+      if (cb) cb();
+    });
+  }
+  function hideConfirm() {
+    var el = document.getElementById("confirm-dialog");
+    if (el) el.classList.remove("show");
+    confirmOnOk = null;
+  }
+  function showConfirm(message, onOk, okLabel) {
+    ensureConfirmDialog();
+    document.getElementById("confirm-message").textContent = message;
+    document.getElementById("confirm-ok-btn").textContent = okLabel || "Delete";
+    confirmOnOk = onOk;
+    document.getElementById("confirm-dialog").classList.add("show");
+  }
+
+  // ---------------- secret dial engine ----------------
+  // One mechanism, reused everywhere: hold either screen edge to activate,
+  // move anywhere once active, release to commit.
+  var DIAL_EDGE_PX = 40;
+  var DIAL_DRAG_STEP_PX = 30;
+  var DIAL_MOVE_CANCEL_PX = 25;
+
+  var dialArmedSession = null; // { getOptions, onCommit, lockKey }
+  var dialActive = null;       // { options, index, startY, timer }
+  var dialPendingEdge = null;
+
+  function dialIsEnabled() { return state.dialSettings.enabled !== false; }
+  function dialSetSession(getOptions, onCommit, lockKey, formatDisplay) {
+    if (!dialIsEnabled()) { dialClearSession(); return; }
+    dialArmedSession = { getOptions: getOptions, onCommit: onCommit, lockKey: lockKey || "_default", formatDisplay: formatDisplay || null };
+    dialEnsureEdgeZones();
+  }
+  function dialClearSession() { dialArmedSession = null; dialEndActive(false); dialRemoveEdgeZones(); }
+  function toggleDialEnabled() {
+    state.dialSettings.enabled = !dialIsEnabled();
+    saveState();
+    if (!state.dialSettings.enabled) dialClearSession();
+    render(); // re-render so the title's capitalization and any active dial rule reflect the new state
+    if (isMagic()) showToast(state.dialSettings.enabled ? "Dial enabled" : "Dial disabled");
+  }  function dialVibrate() {
+    if (state.dialSettings.haptics && navigator.vibrate) { try { navigator.vibrate(state.dialSettings.hapticStrength); } catch (e) {} }
+  }
+  function dialEnsureOverlay() {
+    var el = document.getElementById("dial-overlay");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "dial-overlay";
+      el.innerHTML = '<div class="dial-value" id="dial-value"></div>';
+      document.body.appendChild(el);
+    }
+    return el;
+  }
+  function dialShow(html) {
+    dialEnsureOverlay().classList.add("show");
+    document.getElementById("dial-value").innerHTML = html;
+  }
+  function dialHide() {
+    var el = document.getElementById("dial-overlay");
+    if (el) el.classList.remove("show");
+  }
+  function dialRenderIndex(index) {
+    var val = dialActive.options[index];
+    if (dialArmedSession && dialArmedSession.formatDisplay) return dialArmedSession.formatDisplay(val, index);
+    return esc(String(val));
+  }
+  function dialBeginActive(startY) {
+    if (!dialArmedSession) return;
+    var options = dialArmedSession.getOptions();
+    if (!options || !options.length) { showToast("Nothing to dial"); return; }
+    dialActive = { options: options, index: 0, startY: startY };
+    dialShow(dialRenderIndex(0));
+    dialVibrate();
+    if (state.dialSettings.inputMode === "auto") {
+      dialActive.timer = setInterval(function () {
+        dialActive.index = (dialActive.index + 1) % dialActive.options.length;
+        dialShow(dialRenderIndex(dialActive.index));
+        dialVibrate();
+      }, state.dialSettings.cycleSpeedMs);
+    }
+  }
+  function dialUpdateDrag(y) {
+    if (!dialActive || state.dialSettings.inputMode !== "drag") return;
+    var raw = (dialActive.startY - y) / DIAL_DRAG_STEP_PX;
+    if (state.dialSettings.invertDrag) raw = -raw;
+    var steps = Math.round(raw);
+    var n = dialActive.options.length;
+    var newIndex = ((steps % n) + n) % n;
+    if (newIndex !== dialActive.index) {
+      dialActive.index = newIndex;
+      dialShow(dialRenderIndex(newIndex));
+      dialVibrate();
+    }
+  }
+  function dialCommitActive() {
+    if (!dialActive) return;
+    if (dialActive.timer) clearInterval(dialActive.timer);
+    var value = dialActive.options[dialActive.index];
+    dialHide();
+    var session = dialArmedSession;
+    dialActive = null;
+    if (session && session.onCommit) session.onCommit(value);
+  }
+  function dialEndActive() {
+    if (!dialActive) return;
+    if (dialActive.timer) clearInterval(dialActive.timer);
+    dialHide();
+    dialActive = null;
+  }
+  function dialEnsureEdgeZones() {
+    if (document.getElementById("dial-edge-left")) return;
+    ["left", "right"].forEach(function (side) {
+      var el = document.createElement("div");
+      el.id = "dial-edge-" + side;
+      el.className = "dial-edge-zone dial-edge-" + side;
+      document.body.appendChild(el);
+      el.addEventListener("pointerdown", dialEdgeDown, { passive: false });
+      el.addEventListener("pointermove", dialEdgeMove, { passive: false });
+      el.addEventListener("pointerup", dialEdgeUp);
+      el.addEventListener("pointercancel", dialEdgeCancel);
+      el.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+    });
+  }
+  function dialRemoveEdgeZones() {
+    ["dial-edge-left", "dial-edge-right"].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.remove();
+    });
+  }
+  function dialEdgeDown(e) {
+    if (!dialArmedSession || dialActive) return;
+    e.preventDefault();
+    try { e.target.setPointerCapture(e.pointerId); } catch (err) {}
+    var pe = { x: e.clientX, y: e.clientY, lastY: e.clientY };
+    pe.timer = setTimeout(function () { dialPendingEdge = null; dialBeginActive(pe.lastY); }, state.dialSettings.holdMs);
+    dialPendingEdge = pe;
+  }
+  function dialEdgeMove(e) {
+    if (dialPendingEdge || dialActive) e.preventDefault();
+    if (dialPendingEdge) {
+      dialPendingEdge.lastY = e.clientY;
+      if (Math.abs(e.clientX - dialPendingEdge.x) > DIAL_MOVE_CANCEL_PX || Math.abs(e.clientY - dialPendingEdge.y) > DIAL_MOVE_CANCEL_PX) {
+        clearTimeout(dialPendingEdge.timer); dialPendingEdge = null;
+      }
+    }
+    if (dialActive) dialUpdateDrag(e.clientY);
+  }
+  function dialEdgeUp() {
+    if (dialPendingEdge) { clearTimeout(dialPendingEdge.timer); dialPendingEdge = null; }
+    if (dialActive) dialCommitActive();
+  }
+  function dialEdgeCancel() {
+    if (dialPendingEdge) { clearTimeout(dialPendingEdge.timer); dialPendingEdge = null; }
+    dialEndActive();
+  }
+
+  // ---------------- navigation ----------------
+  function snapshotNav() {
+    return { route: route, currentGroupId: currentGroupId, currentNoteId: currentNoteId, currentPoolId: currentPoolId, editorUseForceOverlay: editorUseForceOverlay };
+  }
+  function applyNav(s) {
+    route = s.route; currentGroupId = s.currentGroupId; currentNoteId = s.currentNoteId; currentPoolId = s.currentPoolId; editorUseForceOverlay = s.editorUseForceOverlay;
+  }
+  function exitMultiSelect() { multiSelectActive = false; multiSelectIds = {}; multiSelectContext = null; }
+  function exitReorderMode() { reorderModeActive = false; reorderModeContext = null; }
+  function enterReorderMode(context) { exitMultiSelect(); reorderModeActive = true; reorderModeContext = context; }
+  function toggleMultiSelect(id) {
+    if (multiSelectIds[id]) delete multiSelectIds[id];
+    else multiSelectIds[id] = true;
+    render();
+  }
+  // All forward screen changes go through here: it remembers where you came from
+  // and creates a browser/WebView history entry, so hardware/gesture back can undo it.
+  function navigate(mutateFn) {
+    navStack.push(snapshotNav());
+    mutateFn();
+    exitMultiSelect(); exitReorderMode();
+    try { history.pushState({ depth: navStack.length }, "", ""); } catch (e) {}
+    render();
+  }
+  // Used only when the screen we'd return to no longer exists (e.g. its group was
+  // just deleted) — clears history instead of leaving a dangling back target.
+  function goHomeReset() {
+    navStack = [];
+    route = "home";
+    exitMultiSelect(); exitReorderMode();
+    try { history.pushState({ depth: 0 }, "", ""); } catch (e) {}
+    render();
+  }
+  function goBack() {
+    if (navStack.length) { applyNav(navStack.pop()); exitMultiSelect(); exitReorderMode(); render(); }
+    // else: nothing left in our stack — let the platform's own back behavior take over.
+  }
+
+  function goHome() { navigate(function () { route = "home"; }); }
+  function toggleMode() {
+    state.mode = isMagic() ? "note" : "magic";
+    saveState();
+    showToast(isMagic() ? "Magic mode" : "Note mode");
+    render();
+  }
+  function openGroupSetup(id) { navigate(function () { currentGroupId = id; route = "groupSetup"; }); }
+  function openListForceSetup(groupId, noteId) {
+    navigate(function () { currentGroupId = groupId; currentNoteId = noteId; route = "listForceSetup"; });
+  }
+  function openPoolsList() { navigate(function () { route = "poolsList"; }); }
+  function openSettings() { navigate(function () { route = "settings"; }); }
+  function openSettingsMenu() { navigate(function () { route = "settingsMenu"; }); }
+  function openExportImport() { navigate(function () { route = "exportImport"; }); }
+  function openExportScreen(groupId) { navigate(function () { exportScreenGroupId = groupId || null; route = "exportScreen"; }); }
+  function openPoolEdit(id) { navigate(function () { currentPoolId = id; route = "poolEdit"; }); }
+  function addPool() {
+    var p = { id: uid("pool"), name: "Untitled pool", values: [] };
+    state.pools.push(p); saveState();
+    openPoolEdit(p.id);
+  }
+  function numberRangeStrings(from, to) {
+    var out = [];
+    for (var i = from; i <= to; i++) out.push(String(i));
+    return out;
+  }
+  var POOL_TEMPLATES = {
+    starsigns: function () {
+      return { name: "Star signs", values: ["Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo", "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"] };
+    },
+    cards: function () {
+      return {
+        name: "Playing cards",
+        values: [],
+        columns: [
+          { name: "Rank", values: ["Ace", "2", "3", "4", "5", "6", "7", "8", "9", "10", "Jack", "Queen", "King"] },
+          { name: "Suit", values: ["Hearts", "Diamonds", "Clubs", "Spades"] }
+        ]
+      };
+    },
+    digits2: function () {
+      return {
+        name: "2-digit numbers",
+        values: [],
+        columnSeparator: "",
+        columns: [
+          { name: "Tens", values: numberRangeStrings(0, 9) },
+          { name: "Ones", values: numberRangeStrings(0, 9) }
+        ]
+      };
+    },
+    digits3: function () {
+      return {
+        name: "3-digit numbers",
+        values: [],
+        columnSeparator: "",
+        columns: [
+          { name: "Hundreds", values: numberRangeStrings(0, 9) },
+          { name: "Tens", values: numberRangeStrings(0, 9) },
+          { name: "Ones", values: numberRangeStrings(0, 9) }
+        ]
+      };
+    }
+  };
+  function addPoolFromTemplate(key) {
+    poolFabMenuOpen = false;
+    if (key === "blank" || !POOL_TEMPLATES[key]) { addPool(); return; }
+    var built = POOL_TEMPLATES[key]();
+    var p = { id: uid("pool"), name: built.name, values: built.values || [] };
+    if (built.columns) p.columns = built.columns;
+    if (typeof built.columnSeparator === "string") p.columnSeparator = built.columnSeparator;
+    state.pools.push(p); saveState();
+    openPoolEdit(p.id);
+  }
+  function openGroupView(id) {
+    navigate(function () {
+      currentGroupId = id; lastActiveGroupId = id; sessionCounts[id] = 0; sessionForced[id] = {};
+      dialedPoolValue[id] = null; columnDialProgress[id] = []; dialLockedGroups[id] = false;
+      route = "groupView";
+    });
+  }
+  function openNote(groupId, noteId, useForceOverlay) {
+    navigate(function () {
+      var note = getNote(groupId, noteId);
+      currentGroupId = groupId; currentNoteId = noteId;
+      editorUseForceOverlay = !!useForceOverlay;
+      if (note.type === "list") {
+        route = "listEditor";
+        listForceDigits[note.id] = [];
+        listForceTarget[note.id] = null;
+        listForceOverrideText[note.id] = null;
+      }
+      else if (note.type === "drawing") route = "drawingEditor";
+      else {
+        route = "noteEditor";
+        noteWordOverride[note.id] = null;
+        columnDialProgress["noteword_" + note.id] = [];
+      }
+    });
+  }
+  function openNoteFromGroupView(groupId, noteId) {
+    var group = findGroup(groupId), note = findNoteInGroup(group, noteId);
+    if (!isMagic() && group.force.armed) {
+      sessionCounts[groupId] = (sessionCounts[groupId] || 0) + 1;
+      var count = sessionCounts[groupId];
+      var candidates = (group.categories || []).filter(function (c) { return c.triggerCount === count && (c.poolId || (c.word && c.word.trim())); });
+      if (candidates.length && note.type === "text") {
+        var noteCatIds = {};
+        buildTokens(note).forEach(function (t) { if (t.type === "tag") noteCatIds[t.categoryId] = true; });
+        var matching = candidates.filter(function (c) { return noteCatIds[c.id]; }).map(function (c) {
+          if (!c.poolId) return { categoryId: c.id, word: c.word, replaceAll: c.replaceAll };
+          var dialed = dialedPoolValue[groupId];
+          if (!dialed) return null; // nothing dialed yet — this category can't fire
+          return { categoryId: c.id, word: dialed, replaceAll: c.replaceAll };
+        }).filter(function (c) { return c; });
+        if (matching.length) {
+          if (!sessionForced[groupId]) sessionForced[groupId] = {};
+          var entry = sessionForced[groupId][noteId] || { rules: [], overrideText: null };
+          matching.forEach(function (r) {
+            if (!entry.rules.some(function (er) { return er.categoryId === r.categoryId; })) entry.rules.push(r);
+          });
+          sessionForced[groupId][noteId] = entry;
+          dialLockedGroups[groupId] = true; // the force has been shown — dial goes inert until this trick is re-entered
+        }
+      }
+    }
+    openNote(groupId, noteId, true);
+  }
+
+  function addGroup() {
+    var g = { id: uid("grp"), title: "Untitled", color: "#FFFFFF", previewRows: 3, notes: [],
+      categories: [], force: { armed: false } };
+    state.groups.push(g); saveState();
+    openGroupSetup(g.id);
+  }
+  function deleteGroup(id) { state.groups = state.groups.filter(function (g) { return g.id !== id; }); saveState(); goHomeReset(); }
+
+  // ---- export / import ----
+  function buildExportPayload(groupIds) {
+    var groupsToExport = groupIds ? state.groups.filter(function (g) { return groupIds.indexOf(g.id) !== -1; }) : state.groups.slice();
+    var poolIdsNeeded = {};
+    groupsToExport.forEach(function (g) {
+      (g.categories || []).forEach(function (c) { if (c.poolId) poolIdsNeeded[c.poolId] = true; });
+    });
+    var poolsToExport = state.pools.filter(function (p) { return poolIdsNeeded[p.id]; });
+    return { keepForceExport: true, version: 1, groups: JSON.parse(JSON.stringify(groupsToExport)), pools: JSON.parse(JSON.stringify(poolsToExport)) };
+  }
+  function exportPayloadToText(payload) { return JSON.stringify(payload, null, 2); }
+  function importPayloadFromText(jsonText) {
+    var data;
+    try { data = JSON.parse(jsonText); } catch (e) { return { ok: false, error: "That doesn't look like valid export text." }; }
+    var groupsIn = Array.isArray(data.groups) ? data.groups : (data.group ? [data.group] : null);
+    if (!groupsIn || !groupsIn.length) return { ok: false, error: "No trick data found in that text." };
+    var poolsIn = Array.isArray(data.pools) ? data.pools : [];
+    var poolIdRemap = {};
+    poolsIn.forEach(function (p) {
+      var existing = state.pools.find(function (sp) { return sp.name.toLowerCase() === (p.name || "").toLowerCase(); });
+      if (existing) { poolIdRemap[p.id] = existing.id; return; }
+      var newPool = JSON.parse(JSON.stringify(p));
+      newPool.id = uid("pool");
+      state.pools.push(newPool);
+      poolIdRemap[p.id] = newPool.id;
+    });
+    var importedCount = 0;
+    groupsIn.forEach(function (g) {
+      var newGroup = JSON.parse(JSON.stringify(g));
+      newGroup.id = uid("grp");
+      if (typeof newGroup.previewRows !== "number") newGroup.previewRows = 3;
+      newGroup.force = { armed: false };
+      (newGroup.notes || []).forEach(function (n) { n.id = uid("note"); if (n.type === "list") (n.items || []).forEach(function (it) { it.id = uid("item"); }); });
+      (newGroup.categories || []).forEach(function (c) {
+        var oldCatId = c.id;
+        c.id = uid("cat");
+        if (c.poolId && poolIdRemap[c.poolId]) c.poolId = poolIdRemap[c.poolId];
+        else c.poolId = null;
+        if (typeof c.word !== "string") c.word = "";
+        if (typeof c.triggerCount !== "number") c.triggerCount = 1;
+        if (typeof c.replaceAll !== "boolean") c.replaceAll = false;
+        (newGroup.notes || []).forEach(function (n) {
+          (n.tags || []).forEach(function (t) { if (t.categoryId === oldCatId) t.categoryId = c.id; });
+        });
+      });
+      state.groups.push(newGroup);
+      importedCount++;
+    });
+    saveState();
+    homeOrderEnsure();
+    saveState();
+    return { ok: true, count: importedCount };
+  }
+  function deleteNote(groupId, noteId) {
+    var group = findGroup(groupId);
+    group.notes = group.notes.filter(function (n) { return n.id !== noteId; });
+    saveState(); render();
+  }
+  function deleteNoteAny(target) {
+    if (target.groupId) {
+      var g = findGroup(target.groupId);
+      g.notes = g.notes.filter(function (n) { return n.id !== target.noteId; });
+    } else {
+      state.notes = state.notes.filter(function (n) { return n.id !== target.noteId; });
+      homeOrderEnsure();
+    }
+    saveState();
+    noteMenuTarget = null;
+    goBack();
+  }
+  function duplicateNote(target) {
+    var container = target.groupId ? findGroup(target.groupId).notes : state.notes;
+    var idx = container.findIndex(function (n) { return n.id === target.noteId; });
+    if (idx < 0) return;
+    var copy = JSON.parse(JSON.stringify(container[idx]));
+    copy.id = uid("note");
+    if (copy.type === "list") (copy.items || []).forEach(function (it) { it.id = uid("item"); });
+    container.splice(idx + 1, 0, copy);
+    if (!target.groupId) homeOrderEnsure();
+    noteMenuTarget = null;
+    saveState();
+    showToast("Duplicated");
+    render();
+  }
+  function performMove(destGroupId) {
+    var target = noteMenuTarget;
+    if (!target) { moveMenuOpen = false; render(); return; }
+    var note;
+    if (target.groupId) {
+      var srcGroup = findGroup(target.groupId);
+      var idx = srcGroup.notes.findIndex(function (n) { return n.id === target.noteId; });
+      note = srcGroup.notes.splice(idx, 1)[0];
+    } else {
+      var idx2 = state.notes.findIndex(function (n) { return n.id === target.noteId; });
+      note = state.notes.splice(idx2, 1)[0];
+    }
+    if (destGroupId) findGroup(destGroupId).notes.push(note);
+    else state.notes.push(note);
+    homeOrderEnsure();
+    moveMenuOpen = false; noteMenuTarget = null;
+    saveState();
+    goBack();
+  }
+  function batchContainerNotes() {
+    return multiSelectContext ? findGroup(multiSelectContext).notes : state.notes;
+  }
+  function batchDelete() {
+    var ids = Object.keys(multiSelectIds);
+    if (!ids.length) return;
+    var groupIds = multiSelectContext ? [] : ids.filter(isGroupId);
+    var noteCount = ids.length - groupIds.length;
+    var label = groupIds.length && noteCount
+      ? (ids.length + " item" + (ids.length === 1 ? "" : "s"))
+      : groupIds.length
+        ? (groupIds.length + " group note" + (groupIds.length === 1 ? "" : "s") + " (and everything in " + (groupIds.length === 1 ? "it" : "them") + ")")
+        : (noteCount + " note" + (noteCount === 1 ? "" : "s"));
+    showConfirm("Delete " + label + "?", function () {
+      if (multiSelectContext) {
+        var g = findGroup(multiSelectContext);
+        g.notes = g.notes.filter(function (n) { return !multiSelectIds[n.id]; });
+      } else {
+        state.notes = state.notes.filter(function (n) { return !multiSelectIds[n.id]; });
+        state.groups = state.groups.filter(function (gr) { return !multiSelectIds[gr.id]; });
+        homeOrderEnsure();
+      }
+      saveState();
+      exitMultiSelect();
+      render();
+    });
+  }
+  function batchDuplicate() {
+    var ids = Object.keys(multiSelectIds);
+    var container = batchContainerNotes();
+    ids.forEach(function (id) {
+      if (!multiSelectContext && isGroupId(id)) {
+        var gIdx = state.groups.findIndex(function (gr) { return gr.id === id; });
+        if (gIdx < 0) return;
+        state.groups.splice(gIdx + 1, 0, duplicateGroupDeep(state.groups[gIdx]));
+        return;
+      }
+      var idx = container.findIndex(function (n) { return n.id === id; });
+      if (idx < 0) return;
+      var copy = JSON.parse(JSON.stringify(container[idx]));
+      copy.id = uid("note");
+      if (copy.type === "list") (copy.items || []).forEach(function (it) { it.id = uid("item"); });
+      container.splice(idx + 1, 0, copy);
+    });
+    if (!multiSelectContext) homeOrderEnsure();
+    saveState();
+    exitMultiSelect();
+    render();
+  }
+  function batchMove(destGroupId) {
+    var ids = Object.keys(multiSelectIds);
+    var srcGroup = multiSelectContext ? findGroup(multiSelectContext) : null;
+    ids.forEach(function (id) {
+      if (!multiSelectContext && isGroupId(id)) return; // a whole group note isn't moved "into" another one
+      var note;
+      if (srcGroup) {
+        var idx = srcGroup.notes.findIndex(function (n) { return n.id === id; });
+        if (idx < 0) return;
+        note = srcGroup.notes.splice(idx, 1)[0];
+      } else {
+        var idx2 = state.notes.findIndex(function (n) { return n.id === id; });
+        if (idx2 < 0) return;
+        note = state.notes.splice(idx2, 1)[0];
+      }
+      if (destGroupId) findGroup(destGroupId).notes.push(note);
+      else state.notes.push(note);
+    });
+    homeOrderEnsure();
+    saveState();
+    exitMultiSelect();
+    moveMenuOpen = false;
+    render();
+  }
+  function handleAddPick(type) {
+    fabMenuOpen = false;
+    if (type === "group") { addGroup(); return; }
+    var note = makeNote(type);
+    if (fabMenuGroupId === null) {
+      state.notes.push(note); saveState();
+      openNote(null, note.id, false);
+    } else {
+      var group = findGroup(fabMenuGroupId);
+      group.notes.push(note); saveState();
+      openNote(fabMenuGroupId, note.id, false);
+    }
+  }
+
+  // ---------------- render ----------------
+  function render() {
+    if (route !== "settings" && route !== "groupView" && route !== "listEditor" && route !== "noteEditor") dialClearSession();
+    var app = document.getElementById("app");
+    if (route === "home") app.innerHTML = renderHome();
+    else if (route === "groupSetup") app.innerHTML = renderGroupSetup();
+    else if (route === "groupView") app.innerHTML = renderGroupView();
+    else if (route === "noteEditor") app.innerHTML = renderNoteEditor();
+    else if (route === "listEditor") app.innerHTML = renderListEditor();
+    else if (route === "drawingEditor") app.innerHTML = renderDrawingEditor();
+    else if (route === "settingsMenu") app.innerHTML = renderSettingsMenu();
+    else if (route === "poolsList") app.innerHTML = renderPoolsList();
+    else if (route === "poolEdit") app.innerHTML = renderPoolEdit();
+    else if (route === "settings") app.innerHTML = renderSettings();
+    else if (route === "exportImport") app.innerHTML = renderExportImport();
+    else if (route === "exportScreen") app.innerHTML = renderExportScreen();
+    else if (route === "listForceSetup") app.innerHTML = renderListForceSetup();
+    bind();
+  }
+
+  function renderPoolsList() {
+    var cards = state.pools.map(function (p) {
+      var meta;
+      if (p.columns && p.columns.length >= 2) {
+        meta = p.columns.map(function (c) { return (c.values || []).length; }).join(" \u00d7 ") + " values, " + p.columns.length + " columns";
+      } else {
+        meta = p.values.length + " value" + (p.values.length === 1 ? "" : "s");
+      }
+      return '<div class="card" data-pool="' + p.id + '">' +
+        '<div class="card-title">' + esc(p.name) + '</div>' +
+        '<div class="card-meta">' + meta + '</div>' +
+      '</div>';
+    }).join("");
+    if (!cards) cards = '<div class="empty">No pools yet.<br>Tap + to make one \u2014 e.g. star signs, or a deck of cards.</div>';
+    return (
+      '<div class="screen">' +
+        '<header><button class="back-btn" id="pools-back">\u2190</button><h1 style="font-size:17px;">Pools</h1></header>' +
+        '<div class="field-hint" style="padding:0 12px;">A pool is a list of values one category can rotate through, instead of always forcing the same word. Link one to a category in a trick\u2019s setup.</div>' +
+        '<div class="body-scroll"><div class="grid">' + cards + '</div></div>' +
+        '<button class="fab" id="add-pool-btn">+</button>' +
+        renderPoolFabMenu() +
+      '</div>'
+    );
+  }
+  function renderPoolFabMenu() {
+    if (!poolFabMenuOpen) return "";
+    var pills =
+      '<div class="fab-pill" data-add-pool-type="blank">Blank pool</div>' +
+      '<div class="fab-pill" data-add-pool-type="starsigns">Star signs</div>' +
+      '<div class="fab-pill" data-add-pool-type="cards">Playing cards</div>' +
+      '<div class="fab-pill" data-add-pool-type="digits2">2-digit numbers</div>' +
+      '<div class="fab-pill" data-add-pool-type="digits3">3-digit numbers</div>';
+    return '<div class="fab-menu-backdrop" id="pool-fab-backdrop"></div>' +
+      '<div class="fab-menu">' + pills + '</div>';
+  }
+  function renderPoolEdit() {
+    var pool = findPool(currentPoolId);
+    var isMulti = !!(pool.columns && pool.columns.length >= 2);
+    var body;
+    if (isMulti) {
+      var colsHtml = pool.columns.map(function (col, ci) {
+        var rows = (col.values || []).map(function (v, vi) {
+          return '<div class="note-row-item" data-drag-id="colval:' + ci + ':' + vi + '"><span class="drag-handle">\u2630</span><span class="snippet">' + esc(v) + '</span>' +
+            '<button class="btn btn-sm btn-danger" data-del-col-value="' + ci + ":" + vi + '">Delete</button></div>';
+        }).join("") || '<div class="field-hint">No values yet.</div>';
+        return '<div class="rule-card">' +
+          '<div class="row-flex">' +
+            '<input type="text" data-col-name="' + ci + '" placeholder="Column name (e.g. Rank)" value="' + esc(col.name || "") + '" style="flex:1;">' +
+            (pool.columns.length > 2 ? '<button class="btn btn-sm btn-danger" data-del-column="' + ci + '">Remove</button>' : "") +
+          '</div>' +
+          '<div style="margin-top:8px;">' + rows + '</div>' +
+          '<div class="row-flex" style="margin-top:8px;">' +
+            '<input type="text" data-new-col-value="' + ci + '" placeholder="Add a value">' +
+            '<button class="btn btn-ghost btn-sm" data-add-col-value="' + ci + '">Add</button>' +
+          '</div>' +
+        '</div>';
+      }).join("");
+      body =
+        '<div class="section-label">Columns</div>' +
+        '<div class="field-hint">Each column dials separately \u2014 one fresh edge-hold per column \u2014 then joins into one value. E.g. Rank, then Suit, for a card. Drag a value\u2019s \u2630 handle to reorder it within its column.</div>' +
+        colsHtml +
+        '<div class="btn-row"><button class="btn btn-ghost btn-sm" id="add-column-btn">+ Add column</button></div>' +
+        '<div class="section-label">Join with</div>' +
+        '<input type="text" id="pool-separator" value="' + esc(typeof pool.columnSeparator === "string" ? pool.columnSeparator : " ") + '" placeholder="e.g. a space, or &quot; of &quot;">' +
+        '<div class="field-hint">Columns are joined with this text in between \u2014 e.g. \u201cQueen\u201d + this + \u201cHearts\u201d.</div>';
+    } else {
+      var rows = pool.values.map(function (v, idx) {
+        return '<div class="note-row-item" data-drag-id="val:' + idx + '"><span class="drag-handle">\u2630</span><span class="snippet">' + esc(v) + '</span>' +
+          '<button class="btn btn-sm btn-danger" data-del-value="' + idx + '">Delete</button></div>';
+      }).join("") || '<div class="field-hint">No values yet.</div>';
+      body =
+        '<div class="section-label">Values</div>' +
+        '<div class="field-hint">Drag the \u2630 handle to reorder a value.</div>' + rows +
+        '<div class="row-flex" style="margin-top:8px;">' +
+          '<input type="text" id="new-pool-value" placeholder="Add a value">' +
+          '<button class="btn btn-ghost btn-sm" id="add-pool-value-btn">Add</button>' +
+        '</div>';
+    }
+    return (
+      '<div class="screen">' +
+        '<header><button class="back-btn" id="pool-edit-back">\u2190</button><h1 style="font-size:17px;">Edit pool</h1></header>' +
+        '<div class="body-scroll">' +
+          '<div class="section-label">Name</div>' +
+          '<input type="text" id="pool-name" value="' + esc(pool.name) + '">' +
+          '<div class="row-flex" style="margin-top:16px;">' +
+            '<div><div style="font-size:14px; font-weight:600;">Multiple columns</div>' +
+              '<div class="field-hint">For values built from parts, like a card\u2019s rank and suit, dialed one part at a time.</div></div>' +
+            '<label class="switch"><input type="checkbox" id="pool-multi-toggle" ' + (isMulti ? "checked" : "") + '><span class="slider"></span></label>' +
+          '</div>' +
+          body +
+          '<div class="field-hint">A value can only belong to one pool \u2014 adding one already used elsewhere will be blocked.</div>' +
+          '<div class="section-label">Danger zone</div>' +
+          '<button class="btn btn-danger" id="delete-pool-btn">Delete this pool</button>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  function renderSettingsMenu() {
+    return (
+      '<div class="screen">' +
+        '<header><button class="back-btn" id="settings-menu-back">\u2190</button><h1 style="font-size:17px;">Settings</h1></header>' +
+        '<div class="body-scroll">' +
+          '<div class="settings-menu-row" data-settings-nav="pools"><span class="snippet">Pools</span><span style="color:var(--text-dim);">\u203A</span></div>' +
+          '<div class="settings-menu-row" data-settings-nav="dial"><span class="snippet">Dial</span><span style="color:var(--text-dim);">\u203A</span></div>' +
+          '<div class="settings-menu-row" data-settings-nav="exportimport"><span class="snippet">Export &amp; import tricks</span><span style="color:var(--text-dim);">\u203A</span></div>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+  var exportImportOutput = "";
+  var downloadsNS = null;
+  if (window.claude && window.claude.use) {
+    window.claude.use("downloads").then(function (ns) {
+      downloadsNS = ns;
+      if (route === "exportImport" || route === "exportScreen") render();
+    }).catch(function () {});
+  }
+  function safeFilename(name) {
+    return ((name || "export").replace(/[^a-z0-9 _-]+/gi, "").trim().replace(/\s+/g, "-").slice(0, 60)) || "export";
+  }
+  function renderExportImport() {
+    var groupOptions = state.groups.map(function (g) {
+      return '<label style="font-size:13px; display:flex; align-items:center; gap:8px; padding:4px 0;">' +
+        '<input type="checkbox" data-export-group="' + g.id + '" style="width:auto;"> ' + esc(g.title || "Untitled") +
+      '</label>';
+    }).join("") || '<div class="field-hint">No tricks yet.</div>';
+    return (
+      '<div class="screen">' +
+        '<header><button class="back-btn" id="exportimport-back">\u2190</button><h1 style="font-size:17px;">Export &amp; import</h1></header>' +
+        '<div class="body-scroll">' +
+          '<div class="section-label">Export</div>' +
+          '<div class="field-hint">Pick which tricks to export \u2014 leave all unchecked to export everything. Any pools they use come along with them.</div>' +
+          groupOptions +
+          (downloadsNS ? '<div class="btn-row"><button class="btn btn-ghost" id="export-download-btn">Download file</button></div>' : "") +
+          '<div class="btn-row"><button class="btn btn-ghost btn-sm" id="export-generate-btn">' + (downloadsNS ? "Or generate as text instead" : "Generate export text") + '</button></div>' +
+          (exportImportOutput
+            ? '<textarea id="export-output" readonly style="width:100%; min-height:140px; font-size:12px; font-family:monospace;">' + esc(exportImportOutput) + '</textarea>' +
+              '<div class="btn-row"><button class="btn btn-ghost btn-sm" id="export-copy-btn">Copy to clipboard</button></div>'
+            : "") +
+          '<div class="section-label">Import</div>' +
+          '<div class="field-hint">Choose an exported file, or paste exported text below. Matching pool names are reused; anything new is added.</div>' +
+          '<input type="file" id="import-file-input" accept=".json,.txt,application/json,text/plain" style="display:none;">' +
+          '<div class="btn-row"><button class="btn btn-ghost" id="import-file-btn">Choose file\u2026</button></div>' +
+          '<textarea id="import-input" placeholder="...or paste exported text here" style="width:100%; min-height:120px; font-size:12px; font-family:monospace;"></textarea>' +
+          '<div class="btn-row"><button class="btn btn-ghost" id="import-run-btn">Import pasted text</button></div>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+  function renderExportScreen() {
+    var group = exportScreenGroupId ? findGroup(exportScreenGroupId) : null;
+    var text = exportPayloadToText(buildExportPayload(group ? [group.id] : null));
+    return (
+      '<div class="screen">' +
+        '<header><button class="back-btn" id="export-screen-back">\u2190</button><h1 style="font-size:17px;">Export ' + (group ? esc(group.title || "trick") : "all tricks") + '</h1></header>' +
+        '<div class="body-scroll">' +
+          (downloadsNS
+            ? '<div class="field-hint">Save this as a file, or copy the text below to paste into Export &amp; import \u2192 Import elsewhere.</div>' +
+              '<div class="btn-row"><button class="btn btn-ghost" id="export-screen-download-btn">Download file</button></div>'
+            : '<div class="field-hint">Copy this text and paste it into Export &amp; import \u2192 Import elsewhere.</div>') +
+          '<textarea id="export-screen-output" readonly style="width:100%; min-height:300px; font-size:12px; font-family:monospace;">' + esc(text) + '</textarea>' +
+          '<div class="btn-row"><button class="btn btn-ghost" id="export-screen-copy-btn">Copy to clipboard</button></div>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  function renderSettings() {
+    var poolOptions = '<option value="">\u2014 pick a pool \u2014</option>' + state.pools.map(function (p) {
+      return '<option value="' + p.id + '" ' + (p.id === dialDemoPoolId ? "selected" : "") + '>' + esc(p.name) + '</option>';
+    }).join("");
+    return (
+      '<div class="screen">' +
+        '<header><button class="back-btn" id="settings-back">\u2190</button><h1 style="font-size:17px;">Dial</h1></header>' +
+        '<div class="body-scroll">' +
+          '<div class="row-flex">' +
+            '<div><div style="font-size:14px; font-weight:600;">Dial enabled</div>' +
+              '<div class="field-hint">Long-press either \u201C+\u201D button anywhere in the app to toggle this too.</div></div>' +
+            '<label class="switch"><input type="checkbox" id="dial-enabled" ' + (dialIsEnabled() ? "checked" : "") + '><span class="slider"></span></label>' +
+          '</div>' +
+          '<div class="section-label">Dial input</div>' +
+          '<div class="row-flex">' +
+            '<label style="display:flex;align-items:center;gap:6px;font-size:14px;"><input type="radio" name="dialmode" value="auto" ' + (state.dialSettings.inputMode === "auto" ? "checked" : "") + ' style="width:auto;"> Auto-cycle</label>' +
+            '<label style="display:flex;align-items:center;gap:6px;font-size:14px;"><input type="radio" name="dialmode" value="drag" ' + (state.dialSettings.inputMode === "drag" ? "checked" : "") + ' style="width:auto;"> Drag to scrub</label>' +
+          '</div>' +
+          '<div class="field-hint">Hold either edge of the screen to activate, wherever the dial is available. Move anywhere once it\u2019s active. Release to commit whatever\u2019s showing.</div>' +
+          '<div class="row-flex" style="margin-top:14px;">' +
+            '<div><div style="font-size:14px; font-weight:600;">Invert drag direction</div>' +
+              '<div class="field-hint">On: dragging down increases the value instead of decreasing it. Only affects drag mode.</div></div>' +
+            '<label class="switch"><input type="checkbox" id="dial-invert" ' + (state.dialSettings.invertDrag ? "checked" : "") + '><span class="slider"></span></label>' +
+          '</div>' +
+
+          '<div class="section-label">Hold to activate</div>' +
+          '<input type="range" id="dial-hold" min="100" max="2000" step="50" value="' + state.dialSettings.holdMs + '">' +
+          '<div class="field-hint" id="dial-hold-label">' + state.dialSettings.holdMs + 'ms \u2014 how long you have to hold the edge before the dial opens.</div>' +
+
+          '<div class="section-label">Cycle speed</div>' +
+          '<input type="range" id="dial-speed" min="250" max="1000" step="50" value="' + state.dialSettings.cycleSpeedMs + '">' +
+          '<div class="field-hint" id="dial-speed-label">' + state.dialSettings.cycleSpeedMs + 'ms per step in auto-cycle. Higher is slower.</div>' +
+
+          '<div class="row-flex" style="margin-top:16px;">' +
+            '<div style="font-size:14px; font-weight:600;">Haptic feedback</div>' +
+            '<label class="switch"><input type="checkbox" id="dial-haptics" ' + (state.dialSettings.haptics ? "checked" : "") + '><span class="slider"></span></label>' +
+          '</div>' +
+          '<div class="section-label">Haptic strength</div>' +
+          '<input type="range" id="dial-haptic-strength" min="5" max="40" step="5" value="' + state.dialSettings.hapticStrength + '">' +
+          '<div class="field-hint" id="dial-strength-label">' + state.dialSettings.hapticStrength + 'ms buzz per step. Actual feel varies by device.</div>' +
+
+          '<div class="section-label">Try the dial</div>' +
+          '<div class="field-hint">Pick a pool, then hold either edge of this screen to test it \u2014 works anywhere on this page while a pool is selected.</div>' +
+          '<select id="dial-demo-pool">' + poolOptions + '</select>' +
+          '<div style="margin-top:14px; border:1px dashed var(--border); border-radius:10px; padding:24px; text-align:center;">' +
+            '<div style="font-size:13px; color:var(--text-dim);">Last committed value</div>' +
+            '<div style="font-size:22px; font-weight:700; margin-top:6px;">' + esc(dialDemoValue || "\u2014") + '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  function renderFabMenu(includeGroup) {
+    if (!fabMenuOpen) return "";
+    var pills = "";
+    if (includeGroup) pills += '<div class="fab-pill" data-add-type="group">Group</div>';
+    pills += '<div class="fab-pill" data-add-type="drawing">Drawing</div>';
+    pills += '<div class="fab-pill" data-add-type="list">List</div>';
+    pills += '<div class="fab-pill" data-add-type="text">Text</div>';
+    return '<div class="fab-menu-backdrop" id="fab-backdrop"></div>' +
+      '<div class="fab-menu">' + pills + '</div>';
+  }
+  function renderMultiSelectBar() {
+    if (!multiSelectActive) return "";
+    var ids = Object.keys(multiSelectIds);
+    var count = ids.length;
+    var anyMovable = multiSelectContext ? count > 0 : ids.some(function (id) { return !isGroupId(id); });
+    return '<div class="multiselect-bar">' +
+      '<span class="multiselect-count">' + count + ' selected</span>' +
+      '<div class="multiselect-actions">' +
+        '<button class="btn btn-sm btn-ghost" id="ms-reorder-btn">Reorder</button>' +
+        (anyMovable ? '<button class="btn btn-sm btn-ghost" id="ms-move-btn">Move</button>' : "") +
+        '<button class="btn btn-sm btn-ghost" id="ms-duplicate-btn">Duplicate</button>' +
+        '<button class="btn btn-sm btn-danger" id="ms-delete-btn">Delete</button>' +
+        '<button class="btn btn-sm btn-ghost" id="ms-cancel-btn">Cancel</button>' +
+      '</div>' +
+    '</div>';
+  }
+  function bindMultiSelectBar() {
+    if (!multiSelectActive) return;
+    document.getElementById("ms-cancel-btn").addEventListener("click", function () { exitMultiSelect(); render(); });
+    document.getElementById("ms-delete-btn").addEventListener("click", batchDelete);
+    document.getElementById("ms-duplicate-btn").addEventListener("click", batchDuplicate);
+    var msMoveBtn = document.getElementById("ms-move-btn");
+    if (msMoveBtn) msMoveBtn.addEventListener("click", function () {
+      moveMenuBatchMode = true; moveMenuOpen = true; render();
+    });
+    document.getElementById("ms-reorder-btn").addEventListener("click", function () {
+      var ctx = multiSelectContext;
+      enterReorderMode(ctx);
+      render();
+    });
+  }
+  function renderReorderBar() {
+    if (!reorderModeActive) return "";
+    return '<div class="multiselect-bar">' +
+      '<span class="multiselect-count">Drag notes to rearrange</span>' +
+      '<div class="multiselect-actions">' +
+        '<button class="btn btn-sm btn-primary" id="reorder-done-btn">Done</button>' +
+      '</div>' +
+    '</div>';
+  }
+  function bindReorderBar() {
+    if (!reorderModeActive) return;
+    document.getElementById("reorder-done-btn").addEventListener("click", function () { exitReorderMode(); render(); });
+  }
+  function renderNoteMenu() {
+    if (!noteMenuOpen) return "";
+    var target = noteMenuTarget;
+    var targetNote = target ? getNote(target.groupId, target.noteId) : null;
+    var listForceOption = (isMagic() && targetNote && targetNote.type === "list")
+      ? '<div class="fab-pill" data-note-action="listforce">List force setup</div>' : "";
+    return '<div class="fab-menu-backdrop" id="note-menu-backdrop"></div>' +
+      '<div class="fab-menu" style="bottom:24px;">' +
+        '<div class="fab-pill" data-note-action="addphoto">Add photo</div>' +
+        listForceOption +
+        '<div class="fab-pill" data-note-action="move">Move</div>' +
+        '<div class="fab-pill" data-note-action="duplicate">Duplicate</div>' +
+        '<div class="fab-pill" data-note-action="delete">Delete</div>' +
+        '<div class="fab-close-btn" id="note-menu-close">\u00D7</div>' +
+      '</div>';
+  }
+  function renderMoveMenu() {
+    if (!moveMenuOpen) return "";
+    var rows = '<div class="fab-pill" data-move-dest="">Home (no group)</div>' +
+      state.groups.map(function (g) { return '<div class="fab-pill" data-move-dest="' + g.id + '">' + esc(g.title) + '</div>'; }).join("");
+    return '<div class="fab-menu-backdrop" id="move-menu-backdrop"></div>' +
+      '<div class="fab-menu" style="bottom:24px; max-height:60vh; overflow-y:auto;">' + rows +
+        '<div class="fab-close-btn" id="move-menu-close">\u00D7</div>' +
+      '</div>';
+  }
+
+  function renderHome() {
+    homeOrderEnsure();
+    var query = homeSearchQuery.trim().toLowerCase();
+    var cards = state.homeOrder.map(function (entry) {
+      if (entry.kind === "group") {
+        var g = findGroup(entry.id); if (!g) return "";
+        if (query && g.title.toLowerCase().indexOf(query) === -1) return "";
+        var isWhite = g.color === "#FFFFFF";
+        var style = isWhite ? "" : ("background:" + g.color + ";color:#202124;");
+        var pill = "";
+        if (isMagic()) {
+          if (g.force.armed) pill = '<span class="pill">Armed</span>';
+          else if (groupHasRules(g)) pill = '<span class="pill">Set up</span>';
+        }
+        var gPreview = groupPreviewText(g);
+        var gPreviewHtml = gPreview ? '<div class="card-preview" style="-webkit-line-clamp:2;display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden;">' + esc(gPreview) + '</div>' : "";
+        var gSelected = !!multiSelectIds[g.id];
+        var gHomeReorder = reorderModeActive && reorderModeContext === null;
+        var gSelClass = gSelected ? " card-selected" : "";
+        var gReorderClass = gHomeReorder ? " card-reorder-mode" : "";
+        var gCheckHtml = gSelected ? '<div class="card-select-check">\u2713</div>' : "";
+        return '<div class="card' + gSelClass + gReorderClass + '" style="' + style + '" data-drag-id="group:' + g.id + '">' +
+          gCheckHtml +
+          '<div class="card-title">' + esc(g.title) + '</div>' +
+          gPreviewHtml +
+          '<div class="card-meta">' + g.notes.length + ' note' + (g.notes.length === 1 ? "" : "s") + pill + '</div>' +
+        '</div>';
+      } else {
+        var n = findStandaloneNote(entry.id); if (!n) return "";
+        if (query) {
+          var text = (n.title || "") + " " + (n.type === "text" ? plainText(buildTokens(n)) : n.type === "list" ? (n.items || []).map(function (it) { return it.text; }).join(" ") : "");
+          if (text.toLowerCase().indexOf(query) === -1) return "";
+        }
+        var homeReorder = reorderModeActive && reorderModeContext === null;
+        return noteCardHtml(n, 3, 'data-drag-id="note:' + n.id + '"', !!multiSelectIds[n.id], isMagic() && !noteHasForceableTag(n, null), homeReorder);
+      }
+    }).join("");
+    if (!cards) cards = '<div class="empty">Nothing here yet.<br>Tap + to make something.</div>';
+    return (
+      '<div class="screen">' +
+        '<header><h1 id="home-title">notary<span class="title-dot' + (dialTellLocked() ? " locked" : "") + '">.</span>' + (isMagic() ? '<span class="mode-dot" style="background:var(--accent);"></span>' : "") + '</h1>' +
+          '<input type="text" id="home-search" class="header-search" placeholder="Search Notes" value="' + esc(homeSearchQuery) + '">' +
+          (isMagic() ? '<button class="icon-btn" id="settings-open-btn">\u2699</button>' : "") +
+        '</header>' +
+        '<div class="body-scroll"><div class="grid">' + cards + '</div></div>' +
+        (multiSelectActive || reorderModeActive ? "" : '<button class="fab" id="add-fab">+</button>') +
+        renderMultiSelectBar() + renderReorderBar() +
+        renderFabMenu(true) + renderNoteMenu() + renderMoveMenu() +
+      '</div>'
+    );
+  }
+
+  function renderGroupSetup() {
+    var group = findGroup(currentGroupId);
+    var swatches = TRICK_COLORS.map(function (c) {
+      return '<div class="swatch ' + (group.color === c ? "selected" : "") + '" style="background:' + c + ';border:1px solid var(--border);" data-color="' + c + '"></div>';
+    }).join("");
+
+    var forceSection = "";
+    if (isMagic()) {
+      var catRows = group.categories.map(function (c) {
+        var isPoolLinked = !!c.poolId;
+        var pool = isPoolLinked ? findPool(c.poolId) : null;
+        var wordField = isPoolLinked
+          ? '<div style="flex:1; min-width:110px; padding:9px 11px; border:1px dashed var(--border); border-radius:8px; font-size:12.5px; color:var(--text-dim); display:flex; align-items:center;">Set live from pool</div>'
+          : '<input type="text" data-cat-field="word" data-cat-id="' + c.id + '" placeholder="Word to force" value="' + esc(c.word || "") + '">';
+        return '<div class="rule-card" data-drag-id="cat:' + c.id + '">' +
+          '<div class="row-flex">' +
+            '<span class="drag-handle">\u2630</span>' +
+            '<span class="cat-dot" style="background:' + c.color + '"></span>' +
+            '<div class="cat-name-wrap" style="position:relative; flex:1;">' +
+              '<input type="text" autocomplete="off" data-cat-name="' + c.id + '" placeholder="Category name (or a pool\u2019s name)" value="' + esc(c.name) + '" style="width:100%;">' +
+              '<div class="cat-name-suggest" data-suggest-for="' + c.id + '" style="display:none;"></div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="rule-grid" style="margin-top:8px;">' +
+            wordField +
+            '<input type="number" min="1" data-cat-field="triggerCount" data-cat-id="' + c.id + '" value="' + c.triggerCount + '">' +
+          '</div>' +
+          '<div class="row-flex" style="margin-top:8px;">' +
+            '<label style="font-size:13px; display:flex; align-items:center; gap:8px;">' +
+              '<input type="checkbox" data-cat-field="replaceAll" data-cat-id="' + c.id + '" ' + (c.replaceAll ? "checked" : "") + ' style="width:auto;"> Replace every instance' +
+            '</label>' +
+            (isPoolLinked ? '<button class="btn btn-sm btn-ghost" data-unlink-pool="' + c.id + '">Unlink \u201C' + esc(pool ? pool.name : "") + '\u201D</button>' : "") +
+          '</div>' +
+          '<div class="btn-row" style="margin-top:6px;">' +
+            '<button class="btn btn-sm btn-danger" data-del-group-cat="' + c.id + '">Remove category</button>' +
+          '</div>' +
+        '</div>';
+      }).join("") || '<div class="field-hint">No categories yet \u2014 add one below.</div>';
+
+      var poolHint = state.pools.length
+        ? '<div class="field-hint">Type a pool\u2019s name as the category name to link it live \u2014 only one category per trick may be pool-linked at a time. Manage pools from Settings.</div>'
+        : '<div class="field-hint">No pools created yet \u2014 make one from Settings to link it here.</div>';
+
+      forceSection =
+        '<div class="section-label">Categories &amp; forcing</div>' +
+        '<div class="field-hint">Drag the \u2630 handle to reorder. Tag text in a note with a category, then it can force a word \u2014 fixed, or live from a pool.</div>' +
+        catRows +
+        '<div class="btn-row"><button class="btn btn-ghost" id="add-cat-btn">+ Add category</button></div>' +
+        poolHint +
+        '<div class="row-flex" style="margin-top:16px;">' +
+          '<div><div style="font-size:14px; font-weight:600;">Armed</div>' +
+            '<div class="field-hint">While armed, opening notes counts toward your categories \u2014 in either mode.</div></div>' +
+          '<label class="switch"><input type="checkbox" id="force-armed" ' + (group.force.armed ? "checked" : "") + (groupHasRules(group) ? "" : " disabled") + '><span class="slider"></span></label>' +
+        '</div>' +
+        (!groupHasRules(group) ? '<div class="status-line">Add at least one category with a word or pool before arming.</div>' : "");
+    }
+
+    return (
+      '<div class="screen">' +
+        '<header><button class="back-btn" id="setup-back">\u2190</button><h1 style="font-size:17px;">' + (isMagic() ? "Trick setup" : "Group setup") + '</h1></header>' +
+        '<div class="body-scroll">' +
+          '<div class="section-label">Title</div>' +
+          '<input type="text" id="group-title" value="' + esc(group.title) + '">' +
+          '<div class="section-label">Color</div>' +
+          '<div class="swatches">' + swatches + '</div>' +
+          '<div class="section-label">Preview rows</div>' +
+          '<input type="number" id="preview-rows" min="1" max="20" value="' + group.previewRows + '" style="width:110px;">' +
+          '<div class="field-hint">How many lines of the body show in the grid before you have to tap in.</div>' +
+
+          forceSection +
+
+          '<div class="section-label">Export</div>' +
+          '<div class="btn-row"><button class="btn btn-ghost" id="export-trick-btn">Export this ' + (isMagic() ? "trick" : "group note") + '</button></div>' +
+          '<div class="section-label">Danger zone</div>' +
+          '<button class="btn btn-danger" id="delete-group-btn">Delete this group note</button>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  function renderGroupView() {
+    var group = findGroup(currentGroupId);
+    var groupViewReorder = reorderModeActive && reorderModeContext === currentGroupId;
+    var cards = group.notes.map(function (n) {
+      return noteCardHtml(n, group.previewRows, 'data-drag-id="' + n.id + '"', !!multiSelectIds[n.id], isMagic() && !noteHasForceableTag(n, group), groupViewReorder);
+    }).join("");
+    if (!cards) cards = '<div class="empty">No notes yet.<br>Tap + to add one.</div>';
+    var dialRule = groupPoolLinkedCategory(group);
+    var dialStatus = "";
+    if (isMagic() && dialRule) {
+      var loaded = dialedPoolValue[currentGroupId];
+      dialStatus = '<div class="field-hint" style="padding:0 12px;">Dial armed' +
+        (loaded ? " \u2014 loaded: " + esc(loaded) : " \u2014 nothing loaded yet, hold an edge") + '</div>';
+    }
+    return (
+      '<div class="screen">' +
+        '<header><button class="back-btn" id="groupview-back">\u2190</button><h1 style="font-size:17px;flex:1;">' + esc(group.title) + '</h1>' +
+          '<button class="icon-btn" id="groupview-settings-btn">\u2699</button>' +
+        '</header>' +
+        dialStatus +
+        '<div class="body-scroll"><div class="grid">' + cards + '</div></div>' +
+        (multiSelectActive || reorderModeActive ? "" : '<button class="fab" id="add-note-fab">+</button>') +
+        renderMultiSelectBar() + renderReorderBar() +
+        renderFabMenu(false) + renderNoteMenu() + renderMoveMenu() +
+      '</div>'
+    );
+  }
+
+  function editorMenuBtnHtml() {
+    return '<button class="fab-secondary" id="note-menu-open-btn" data-menu-note="' + currentNoteId + '" data-menu-group="' + (currentGroupId || "") + '">\u22EE</button>';
+  }
+  function renderAttachmentsHtml(note) {
+    var photos = (note.images || []).map(function (img) {
+      return '<div class="photo-thumb"><img src="' + img.dataUrl + '"><button class="photo-remove" data-remove-photo="' + img.id + '">\u00D7</button></div>';
+    }).join("");
+    var photosBlock = photos
+      ? '<div class="section-label">Photos</div><div class="photo-strip">' + photos + '</div>'
+      : "";
+    return (
+      photosBlock +
+      '<input type="file" accept="image/*" id="photo-input" style="display:none;">'
+    );
+  }
+  function bindAttachments(note) {
+    var photoInput = document.getElementById("photo-input");
+    if (photoInput) {
+      photoInput.addEventListener("change", function (e) {
+        var file = e.target.files && e.target.files[0];
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function (ev) {
+          var img = new Image();
+          img.onload = function () {
+            var maxW = 800;
+            var scale = Math.min(1, maxW / img.width);
+            var w = Math.max(1, Math.round(img.width * scale)), h = Math.max(1, Math.round(img.height * scale));
+            var canvas = document.createElement("canvas");
+            canvas.width = w; canvas.height = h;
+            canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+            var dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+            note.images = note.images || [];
+            note.images.push({ id: uid("img"), dataUrl: dataUrl });
+            saveState(); render();
+          };
+          img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+    document.querySelectorAll("[data-remove-photo]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var id = b.getAttribute("data-remove-photo");
+        note.images = (note.images || []).filter(function (i) { return i.id !== id; });
+        saveState(); render();
+      });
+    });
+  }
+
+  function renderNoteEditor() {
+    var note = getNote(currentGroupId, currentNoteId);
+    var group = currentGroupId ? findGroup(currentGroupId) : null;
+    var forceEntry = editorUseForceOverlay && sessionForced[currentGroupId] && sessionForced[currentGroupId][currentNoteId];
+    var isForced = !!(forceEntry && forceEntry.rules && forceEntry.rules.length);
+    var dialTag = !isForced ? noteDialTag(note, group) : null;
+    var wordOverride = dialTag ? noteWordOverride[note.id] : null;
+    var bodyValue = isForced
+      ? (forceEntry.overrideText != null ? forceEntry.overrideText : forcedTextMulti(buildTokens(note), forceEntry.rules))
+      : (wordOverride != null ? applyNoteWordOverride(note.rawText, dialTag, wordOverride) : note.rawText);
+    var forcedBadge = (isMagic() && isForced) ? '<div class="forced-badge">Showing forced content</div>' : "";
+    var showOverlay = isMagic() && !isForced && wordOverride == null;
+    var dialStatus = "";
+    if (isMagic() && dialTag) {
+      dialStatus = '<div class="field-hint" style="padding:0 20px;">Word dial armed' +
+        (wordOverride ? " \u2014 showing: " + esc(wordOverride) : " \u2014 hold an edge to dial this word") + '.</div>';
+    }
+
+    var extra = "";
+    if (isMagic() && currentGroupId) {
+      var chips = group.categories.map(function (c) {
+        return '<div class="chip" style="background:' + c.color + '33;" data-tag-cat="' + c.id + '">' + esc(c.name) + '</div>';
+      }).join("") || '<div class="field-hint">No categories yet \u2014 create one by typing it into a force rule in this trick\u2019s setup.</div>';
+      extra =
+        '<div class="section-label">Tag a selection</div>' +
+        '<div class="field-hint">Select a word or phrase like you would to copy it, then tap a category below. To remove a tag, tap into that word (or select it) and tap its category again.</div>' +
+        '<div class="chip-row">' + chips + '</div>';
+    }
+    var bodyField = showOverlay
+      ? '<div class="body-editor-wrap">' +
+          '<div class="body-highlight-overlay" id="body-highlight-overlay">' + renderTagPreviewHtml(findGroup(currentGroupId), note) + '</div>' +
+          '<textarea id="note-text" class="body-textarea with-overlay" placeholder="Note">' + esc(bodyValue) + '</textarea>' +
+        '</div>'
+      : '<textarea id="note-text" class="body-textarea" placeholder="Note">' + esc(bodyValue) + '</textarea>';
+    return (
+      '<div class="screen">' +
+        '<header><button class="back-btn" id="editor-back">\u2190</button></header>' +
+        dialStatus +
+        '<div class="editor-wrap">' +
+          forcedBadge +
+          '<input type="text" id="note-title" class="title-input" placeholder="Title" value="' + esc(note.title) + '">' +
+          bodyField +
+          '<div class="editor-extra">' + extra + renderAttachmentsHtml(note) + '</div>' +
+        '</div>' +
+        editorMenuBtnHtml() +
+        renderNoteMenu() + renderMoveMenu() +
+      '</div>'
+    );
+  }
+
+  function renderListEditor() {
+    var note = getNote(currentGroupId, currentNoteId);
+    var forcedPos = listForceTarget[note.id];
+    var rows = (note.items || []).map(function (it, idx) {
+      var isForcedRow = !!forcedPos && (idx + 1) === forcedPos;
+      var displayText = isForcedRow
+        ? (listForceOverrideText[note.id] != null ? listForceOverrideText[note.id] : note.listForce.word)
+        : it.text;
+      var style = it.done ? "text-decoration:line-through;opacity:0.55;" : "";
+      return '<div class="list-item-row">' +
+        '<div class="list-item-num" data-toggle-item="' + it.id + '">' + (idx + 1) + '.</div>' +
+        '<input type="text" class="list-item-text" data-item-text="' + it.id + '" data-item-idx="' + idx + '" style="' + style + '" value="' + esc(displayText) + '">' +
+      '</div>';
+    }).join("");
+    var lfStatus = "";
+    if (isMagic() && note.listForce && note.listForce.armed) {
+      var digitsSoFar = listForceDigits[note.id] || [];
+      var totalDigits = String(Math.max(1, note.items.length)).length;
+      var parts = [];
+      if (digitsSoFar.length) parts.push("dialing digit " + (digitsSoFar.length + 1) + " of " + totalDigits);
+      if (forcedPos) parts.push("target #" + forcedPos);
+      lfStatus = '<div class="field-hint" style="padding:0 20px;">List force armed' + (parts.length ? " \u2014 " + parts.join(", ") : " \u2014 hold an edge to dial a position") + '.</div>';
+    }
+    return (
+      '<div class="screen">' +
+        '<header><button class="back-btn" id="editor-back">\u2190</button></header>' +
+        lfStatus +
+        '<div class="editor-wrap">' +
+          '<input type="text" id="note-title" class="title-input" placeholder="Title" value="' + esc(note.title) + '">' +
+          '<div class="list-items-wrap">' + rows + '</div>' +
+          '<div class="editor-extra">' + renderAttachmentsHtml(note) + '</div>' +
+        '</div>' +
+        editorMenuBtnHtml() +
+        renderNoteMenu() + renderMoveMenu() +
+      '</div>'
+    );
+  }
+
+  function renderListForceSetup() {
+    var note = getNote(currentGroupId, currentNoteId);
+    return (
+      '<div class="screen">' +
+        '<header><button class="back-btn" id="lf-setup-back">\u2190</button><h1 style="font-size:17px;">List force setup</h1></header>' +
+        '<div class="body-scroll">' +
+          '<div class="field-hint">This works like a real "one item per number" force \u2014 pick any position, and once armed, dialing a number swaps whatever\u2019s really there for the word below, only for as long as you\u2019re viewing this list.</div>' +
+          '<div class="section-label">Word to force</div>' +
+          '<input type="text" id="lf-word" placeholder="Word or phrase to force" value="' + esc(note.listForce.word) + '">' +
+          '<div class="field-hint">This list has ' + note.items.length + ' item' + (note.items.length === 1 ? "" : "s") + ', so positions dial from 1 to ' + note.items.length + '.</div>' +
+          '<div class="row-flex" style="margin-top:16px;">' +
+            '<div><div style="font-size:14px; font-weight:600;">Armed</div>' +
+              '<div class="field-hint">While armed, opening this list lets you dial a position on the spot.</div></div>' +
+            '<label class="switch"><input type="checkbox" id="lf-armed" ' + (note.listForce.armed ? "checked" : "") + (note.listForce.word.trim() ? "" : " disabled") + '><span class="slider"></span></label>' +
+          '</div>' +
+          (!note.listForce.word.trim() ? '<div class="status-line">Set a word to force before arming.</div>' : "") +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  function renderDrawingEditor() {
+    var note = getNote(currentGroupId, currentNoteId);
+    return (
+      '<div class="screen">' +
+        '<header><button class="back-btn" id="editor-back">\u2190</button><div class="spacer"></div><button class="btn btn-sm btn-ghost" id="clear-drawing-btn">Clear</button></header>' +
+        '<div class="editor-wrap">' +
+          '<input type="text" id="note-title" class="title-input" placeholder="Title" value="' + esc(note.title) + '">' +
+          '<div style="flex:1; border:1px solid var(--border); border-radius:10px; overflow:hidden; margin-top:8px;">' +
+            '<canvas id="draw-canvas" style="width:100%; height:100%; display:block; touch-action:none; background:var(--surface);"></canvas>' +
+          '</div>' +
+          '<div class="editor-extra">' + renderAttachmentsHtml(note) + '</div>' +
+        '</div>' +
+        editorMenuBtnHtml() +
+        renderNoteMenu() + renderMoveMenu() +
+      '</div>'
+    );
+  }
+
+  function renderTagPreviewHtml(group, note) {
+    var tokens = buildTokens(note);
+    if (!tokens.length || plainText(tokens) === "") return "";
+    return tokens.map(function (t) {
+      if (t.type === "tag") {
+        var cat = group ? findCategoryInGroup(group, t.categoryId) : null;
+        var color = cat ? cat.color : "#ccc";
+        return '<span class="tag-span" style="background:' + color + '55;">' + esc(t.value) + '</span>';
+      }
+      return esc(t.value);
+    }).join("");
+  }
+  function refreshNoteEditor() {
+    var note = getNote(currentGroupId, currentNoteId);
+    var el = document.getElementById("body-highlight-overlay");
+    if (el) el.innerHTML = renderTagPreviewHtml(findGroup(currentGroupId), note);
+  }
+
+  // ---------------- gesture handling: tap / long-press / drag-reorder ----------------
+  function attachLongPress(el, onLong, onShort, ms) {
+    var timer = null, isLongHold = false, moved = false, startX = 0, startY = 0;
+    el.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+    el.addEventListener("pointerdown", function (e) {
+      e.preventDefault();
+      isLongHold = false; moved = false;
+      startX = e.clientX; startY = e.clientY;
+      clearTimeout(timer);
+      timer = setTimeout(function () { isLongHold = true; }, ms);
+    });
+    el.addEventListener("pointermove", function (e) {
+      if (Math.abs(e.clientX - startX) > 12 || Math.abs(e.clientY - startY) > 12) {
+        moved = true; clearTimeout(timer);
+      }
+    });
+    el.addEventListener("pointerup", function () {
+      clearTimeout(timer);
+      if (isLongHold) { isLongHold = false; onLong(); }
+      else if (!moved && onShort) { onShort(); }
+    });
+    el.addEventListener("pointercancel", function () {
+      clearTimeout(timer); isLongHold = false;
+    });
+  }
+
+  function attachCardGesture(el, opts) {
+    // Two drag modes:
+    // - handleSelector given (category rows, pool values, group cards): grabbing that
+    //   dedicated handle drags immediately — it has touch-action:none baked into its own
+    //   CSS from render, which native scroll can't preempt.
+    // - no handleSelector (note cards): press and HOLD the whole card first (same
+    //   duration as a long-press); only once that hold completes does further movement
+    //   turn into a drag. Early movement (before the hold completes) is left alone as an
+    //   ordinary scroll. Holding still and releasing without ever dragging fires the
+    //   existing long-press options instead — decided at release, since by then we know
+    //   for certain whether a drag happened.
+    var pressTimer = null, holdComplete = false, dragging = false, startX = 0, startY = 0,
+        clone = null, dragStartLeft = 0, dragStartTop = 0, moved = false, skip = false, handleGrab = false;
+    var LONG_MS = opts.longPressMs || 500;
+    var MOVE_THRESHOLD = 10;
+    var DRAG_THRESHOLD = 6; // smaller once the hold has already established intent
+
+    el.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+
+    function beginDrag(e) {
+      dragging = true;
+      var rect = el.getBoundingClientRect();
+      dragStartLeft = rect.left; dragStartTop = rect.top;
+      clone = el.cloneNode(true);
+      clone.style.position = "fixed"; clone.style.left = rect.left + "px"; clone.style.top = rect.top + "px";
+      clone.style.width = rect.width + "px"; clone.style.zIndex = "999"; clone.style.pointerEvents = "none";
+      clone.style.boxShadow = "0 8px 20px rgba(0,0,0,0.35)"; clone.style.transform = "scale(1.03)"; clone.style.opacity = "0.92";
+      document.body.appendChild(clone);
+      el.style.opacity = "0.3";
+      try { el.setPointerCapture(e.pointerId); } catch (err) {}
+    }
+
+    el.addEventListener("pointerdown", function (e) {
+      handleGrab = !!opts.wholeCardDrag || !!(opts.handleSelector && e.target.closest(opts.handleSelector));
+      if (!handleGrab && (e.target.closest(".card-menu-btn") || e.target.closest("input,select,textarea,button,label"))) { skip = true; return; }
+      e.preventDefault();
+      skip = false; holdComplete = false; dragging = false; moved = false;
+      startX = e.clientX; startY = e.clientY;
+      clearTimeout(pressTimer);
+      if (handleGrab) {
+        // A dedicated handle (touch-action:none, baked into its own CSS) — safe to
+        // start the drag immediately, no threshold needed since native scroll can't
+        // claim this touch to begin with.
+        moved = true;
+        if (opts.dragId) beginDrag(e);
+        return;
+      }
+      pressTimer = setTimeout(function () {
+        if (moved || dragging) return;
+        holdComplete = true; // armed: a release now fires the long-press options, movement now starts a drag
+      }, LONG_MS);
+    });
+
+    el.addEventListener("pointermove", function (e) {
+      if (skip) return;
+      var dx = e.clientX - startX, dy = e.clientY - startY;
+      if (dragging && clone) {
+        clone.style.left = (dragStartLeft + dx) + "px";
+        clone.style.top = (dragStartTop + dy) + "px";
+        return;
+      }
+      if (handleGrab) return; // handle drags start immediately in pointerdown; nothing to detect here
+      if (!holdComplete) {
+        // Before the hold completes, movement means the user is scrolling, not
+        // holding — cancel the pending hold and leave native scroll alone.
+        if (Math.abs(dx) > MOVE_THRESHOLD || Math.abs(dy) > MOVE_THRESHOLD) {
+          moved = true;
+          clearTimeout(pressTimer);
+        }
+        return;
+      }
+      if (!dragging && opts.dragId && (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD)) {
+        e.preventDefault();
+        beginDrag(e);
+      }
+    });
+
+    el.addEventListener("pointerup", function (e) {
+      if (skip) { skip = false; return; }
+      clearTimeout(pressTimer);
+      if (dragging) {
+        var dropX = e.clientX, dropY = e.clientY;
+        if (clone) { clone.remove(); clone = null; }
+        el.style.opacity = "";
+        dragging = false; handleGrab = false;
+        var elUnder = document.elementFromPoint(dropX, dropY);
+        var targetCard = elUnder && elUnder.closest("[data-drag-id]");
+        if (targetCard) {
+          var targetId = targetCard.getAttribute("data-drag-id");
+          if (targetId !== opts.dragId && opts.onReorder) opts.onReorder(opts.dragId, targetId);
+        }
+        return;
+      }
+      if (holdComplete) {
+        // Held still, then released without dragging — the finger is already up,
+        // so it's safe to mutate state and rebuild the DOM back to back here.
+        holdComplete = false;
+        if (opts.onLongPress) opts.onLongPress();
+        if (opts.afterLongPress) opts.afterLongPress();
+        return;
+      }
+      if (!moved && opts.onTap) opts.onTap();
+    });
+
+    el.addEventListener("pointercancel", function () {
+      clearTimeout(pressTimer);
+      if (clone) { clone.remove(); clone = null; }
+      el.style.opacity = ""; dragging = false; handleGrab = false; holdComplete = false;
+    });
+  }
+
+  function bindFabMenu() {
+    var backdrop = document.getElementById("fab-backdrop");
+    if (backdrop) backdrop.addEventListener("click", function () { fabMenuOpen = false; render(); });
+    var closeBtn = document.getElementById("fab-close");
+    if (closeBtn) closeBtn.addEventListener("click", function () { fabMenuOpen = false; render(); });
+    document.querySelectorAll("[data-add-type]").forEach(function (pill) {
+      pill.addEventListener("click", function () { handleAddPick(pill.getAttribute("data-add-type")); });
+    });
+  }
+  function bindNoteMenu() {
+    var backdrop = document.getElementById("note-menu-backdrop");
+    if (backdrop) backdrop.addEventListener("click", function () { noteMenuOpen = false; noteMenuTarget = null; render(); });
+    var closeBtn = document.getElementById("note-menu-close");
+    if (closeBtn) closeBtn.addEventListener("click", function () { noteMenuOpen = false; noteMenuTarget = null; render(); });
+    document.querySelectorAll("[data-note-action]").forEach(function (pill) {
+      pill.addEventListener("click", function () {
+        var action = pill.getAttribute("data-note-action");
+        noteMenuOpen = false;
+        if (action === "addphoto") {
+          render();
+          var pi = document.getElementById("photo-input");
+          if (pi) pi.click();
+          return;
+        }
+        if (action === "move") { moveMenuOpen = true; render(); return; }
+        if (action === "duplicate") { duplicateNote(noteMenuTarget); return; }
+        if (action === "listforce") { openListForceSetup(noteMenuTarget.groupId, noteMenuTarget.noteId); return; }
+        if (action === "delete") {
+          var t = noteMenuTarget;
+          render();
+          showConfirm("Delete this note?", function () { deleteNoteAny(t); });
+        }
+      });
+    });
+  }
+  function bindMoveMenu() {
+    var backdrop = document.getElementById("move-menu-backdrop");
+    if (backdrop) backdrop.addEventListener("click", function () { moveMenuOpen = false; noteMenuTarget = null; render(); });
+    var closeBtn = document.getElementById("move-menu-close");
+    if (closeBtn) closeBtn.addEventListener("click", function () { moveMenuOpen = false; noteMenuTarget = null; render(); });
+    document.querySelectorAll("[data-move-dest]").forEach(function (pill) {
+      pill.addEventListener("click", function () {
+        var dest = pill.getAttribute("data-move-dest") || null;
+        if (moveMenuBatchMode) batchMove(dest); else performMove(dest);
+      });
+    });
+  }
+  function bindNoteMenuButtons() {
+    document.querySelectorAll("[data-menu-note]").forEach(function (btn) {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        var noteId = btn.getAttribute("data-menu-note");
+        var groupId = btn.getAttribute("data-menu-group") || null;
+        noteMenuTarget = { groupId: groupId, noteId: noteId };
+        noteMenuOpen = true; render();
+      });
+    });
+  }
+
+  function bind() {
+    if (route === "home") {
+      attachLongPress(document.getElementById("home-title"), toggleMode, toggleDialEnabled, 700);
+      document.getElementById("home-search").addEventListener("input", function (e) {
+        homeSearchQuery = e.target.value; render();
+        var el = document.getElementById("home-search"); el.focus(); el.setSelectionRange(el.value.length, el.value.length);
+      });
+      var addFabBtn = document.getElementById("add-fab");
+      if (addFabBtn) addFabBtn.addEventListener("click", function () {
+        fabMenuOpen = true; fabMenuGroupId = null; render();
+      });
+      var settingsBtn = document.getElementById("settings-open-btn");
+      if (settingsBtn) settingsBtn.addEventListener("click", openSettingsMenu);
+      var homeReorderActive = reorderModeActive && reorderModeContext === null;
+      document.querySelectorAll("[data-drag-id]").forEach(function (card) {
+        var dragId = card.getAttribute("data-drag-id");
+        if (dragId.indexOf("group:") === 0) {
+          var gid = dragId.slice(6);
+          attachCardGesture(card, {
+            dragId: dragId,
+            wholeCardDrag: homeReorderActive,
+            onTap: function () {
+              if (homeReorderActive) return;
+              if (multiSelectActive) { toggleMultiSelect(gid); return; }
+              openGroupView(gid);
+            },
+            onLongPress: function () {
+              if (homeReorderActive) return;
+              if (!multiSelectActive) { multiSelectActive = true; multiSelectIds = {}; multiSelectContext = null; }
+              if (multiSelectIds[gid]) delete multiSelectIds[gid]; else multiSelectIds[gid] = true;
+            },
+            afterLongPress: function () { render(); },
+            onReorder: multiSelectActive ? null : reorderHome
+          });
+        } else {
+          var nid = dragId.slice(5);
+          attachCardGesture(card, {
+            dragId: dragId,
+            wholeCardDrag: homeReorderActive,
+            onTap: function () {
+              if (homeReorderActive) return;
+              if (multiSelectActive) { toggleMultiSelect(nid); return; }
+              openNote(null, nid, false);
+            },
+            onLongPress: function () {
+              if (homeReorderActive) return;
+              if (!multiSelectActive) { multiSelectActive = true; multiSelectIds = {}; multiSelectContext = null; }
+              if (multiSelectIds[nid]) delete multiSelectIds[nid]; else multiSelectIds[nid] = true;
+            },
+            afterLongPress: function () { render(); },
+            onReorder: multiSelectActive ? null : reorderHome
+          });
+        }
+      });
+      bindNoteMenuButtons();
+      bindMultiSelectBar();
+      bindReorderBar();
+    }
+
+    if (route === "groupSetup") {
+      var group = findGroup(currentGroupId);
+      document.getElementById("setup-back").addEventListener("click", goBack);
+      document.getElementById("group-title").addEventListener("input", function (e) { group.title = e.target.value; saveState(); });
+      document.querySelectorAll(".swatch").forEach(function (sw) {
+        sw.addEventListener("click", function () { group.color = sw.getAttribute("data-color"); saveState(); render(); });
+      });
+      document.getElementById("preview-rows").addEventListener("input", function (e) {
+        group.previewRows = Math.max(1, parseInt(e.target.value, 10) || 3); saveState();
+      });
+      document.getElementById("export-trick-btn").addEventListener("click", function () { openExportScreen(currentGroupId); });
+      document.getElementById("delete-group-btn").addEventListener("click", function () {
+        showConfirm("Delete this group note and everything in it?", function () { deleteGroup(currentGroupId); });
+      });
+
+      if (isMagic()) {
+        document.querySelectorAll("[data-drag-id^='cat:']").forEach(function (row) {
+          attachCardGesture(row, {
+            dragId: row.getAttribute("data-drag-id"),
+            handleSelector: ".drag-handle",
+            onReorder: function (draggedId, targetId) { reorderGroupCategories(currentGroupId, draggedId, targetId); }
+          });
+        });
+        document.getElementById("add-cat-btn").addEventListener("click", function () { addCategoryToGroup(group); render(); });
+        document.querySelectorAll("[data-del-group-cat]").forEach(function (b) {
+          b.addEventListener("click", function () { deleteCategoryFromGroup(group, b.getAttribute("data-del-group-cat")); render(); });
+        });
+        document.querySelectorAll("[data-unlink-pool]").forEach(function (b) {
+          b.addEventListener("click", function () {
+            var cat = findCategoryInGroup(group, b.getAttribute("data-unlink-pool"));
+            cat.poolId = null; saveState(); render();
+          });
+        });
+        document.querySelectorAll("[data-cat-name]").forEach(function (input) {
+          var catId = input.getAttribute("data-cat-name");
+          var suggestBox = document.querySelector('[data-suggest-for="' + catId + '"]');
+          var resolve = function (nameOverride) {
+            var cat = findCategoryInGroup(group, catId);
+            var name = (nameOverride != null ? nameOverride : input.value).trim();
+            if (!name) { input.value = cat.name; return; }
+            input.value = name;
+            cat.name = name;
+            var matchedPool = state.pools.find(function (p) { return p.name.toLowerCase() === name.toLowerCase(); });
+            if (matchedPool && cat.poolId !== matchedPool.id) {
+              var result = linkPoolToCategory(group, cat, matchedPool.id);
+              if (!result.ok) showToast("Only one pool per trick \u2014 unlink \u201C" + result.conflictName + "\u201D first");
+            }
+            saveState(); render();
+          };
+          function showSuggestions() {
+            if (!suggestBox) return;
+            var typed = input.value.trim().toLowerCase();
+            var catNames = group.categories.map(function (c) { return c.name; }).filter(Boolean);
+            var poolNames = state.pools.map(function (p) { return p.name; });
+            var entries = catNames.map(function (n) { return { name: n, isPool: false }; })
+              .concat(poolNames.filter(function (pn) { return catNames.indexOf(pn) === -1; }).map(function (n) { return { name: n, isPool: true }; }));
+            var matches = entries.filter(function (e) { return !typed || e.name.toLowerCase().indexOf(typed) !== -1; });
+            if (!matches.length) { suggestBox.style.display = "none"; suggestBox.innerHTML = ""; return; }
+            suggestBox.innerHTML = matches.map(function (e) {
+              return '<div class="cat-name-suggest-item" data-suggest-value="' + esc(e.name) + '">' + esc(e.name) + (e.isPool ? ' <span style="color:var(--text-dim);font-size:12px;">(pool)</span>' : "") + '</div>';
+            }).join("");
+            suggestBox.style.display = "block";
+            suggestBox.querySelectorAll("[data-suggest-value]").forEach(function (item) {
+              item.addEventListener("pointerdown", function (e) {
+                e.preventDefault(); e.stopPropagation(); // keeps focus and blocks the row's own drag-gesture listener from also seeing this tap
+                suggestBox.style.display = "none";
+                resolve(item.getAttribute("data-suggest-value"));
+              });
+            });
+          }
+          input.addEventListener("focus", showSuggestions);
+          input.addEventListener("input", showSuggestions);
+          input.addEventListener("blur", function () {
+            setTimeout(function () { if (suggestBox) suggestBox.style.display = "none"; }, 0);
+            resolve();
+          });
+          input.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); input.blur(); } });
+        });
+        document.querySelectorAll("[data-cat-field]").forEach(function (input) {
+          var catId = input.getAttribute("data-cat-id");
+          var field = input.getAttribute("data-cat-field");
+          var ev = (input.type === "checkbox") ? "change" : "input";
+          input.addEventListener(ev, function () {
+            var cat = findCategoryInGroup(group, catId);
+            if (field === "triggerCount") cat.triggerCount = Math.max(1, parseInt(input.value, 10) || 1);
+            else if (field === "replaceAll") cat.replaceAll = input.checked;
+            else cat[field] = input.value;
+            saveState();
+            var armedToggle = document.getElementById("force-armed");
+            if (armedToggle) {
+              var ready = groupHasRules(group);
+              armedToggle.disabled = !ready;
+              if (!ready) { armedToggle.checked = false; group.force.armed = false; }
+            }
+          });
+        });
+        var armedEl = document.getElementById("force-armed");
+        if (armedEl) armedEl.addEventListener("change", function (e) { group.force.armed = e.target.checked; saveState(); });
+      }
+    }
+
+    if (route === "groupView") {
+      document.getElementById("groupview-back").addEventListener("click", goBack);
+      var gvSettingsBtn = document.getElementById("groupview-settings-btn");
+      if (gvSettingsBtn) gvSettingsBtn.addEventListener("click", function () { openGroupSetup(currentGroupId); });
+      var addNoteFabBtn = document.getElementById("add-note-fab");
+      if (addNoteFabBtn) addNoteFabBtn.addEventListener("click", function () {
+        fabMenuGroupId = currentGroupId; fabMenuOpen = true; render();
+      });
+      var gvReorderActive = reorderModeActive && reorderModeContext === currentGroupId;
+      document.querySelectorAll("[data-drag-id]").forEach(function (card) {
+        var id = card.getAttribute("data-drag-id");
+        attachCardGesture(card, {
+          dragId: id,
+          wholeCardDrag: gvReorderActive,
+          onTap: function () {
+            if (gvReorderActive) return;
+            if (multiSelectActive) { toggleMultiSelect(id); return; }
+            openNoteFromGroupView(currentGroupId, id);
+          },
+          onLongPress: function () {
+            if (gvReorderActive) return;
+            if (!multiSelectActive) { multiSelectActive = true; multiSelectIds = {}; multiSelectContext = currentGroupId; }
+            if (multiSelectIds[id]) delete multiSelectIds[id]; else multiSelectIds[id] = true;
+          },
+          afterLongPress: function () { render(); },
+          onReorder: multiSelectActive ? null : function (draggedId, targetId) { reorderGroupNotes(currentGroupId, draggedId, targetId); }
+        });
+      });
+      bindNoteMenuButtons();
+      bindMultiSelectBar();
+      bindReorderBar();
+
+      var gvGroup = findGroup(currentGroupId);
+      var dialRule = groupPoolLinkedCategory(gvGroup);
+      if (dialRule && !groupDialLocked(currentGroupId)) {
+        var dialPool = findPool(dialRule.poolId);
+        if (dialPool) {
+          armPoolColumnDial(dialPool, currentGroupId, function (val) {
+            dialedPoolValue[currentGroupId] = val;
+            if (isMagic() && (!dialPool.columns || dialPool.columns.length < 2)) showToast("Loaded: " + val);
+          });
+        } else {
+          dialClearSession();
+        }
+      } else {
+        dialClearSession();
+      }
+    }
+
+    if (route === "noteEditor") {
+      var note = getNote(currentGroupId, currentNoteId);
+      var group3 = currentGroupId ? findGroup(currentGroupId) : null;
+      var forceEntry2 = editorUseForceOverlay && sessionForced[currentGroupId] && sessionForced[currentGroupId][currentNoteId];
+      var isForcedView = !!(forceEntry2 && forceEntry2.rules && forceEntry2.rules.length);
+      var dialTag = !isForcedView ? noteDialTag(note, group3) : null;
+      var isWordOverrideView = !!(dialTag && noteWordOverride[note.id] != null);
+
+      function rearmWordDial() {
+        if (isForcedView) return;
+        if (group3 && groupDialLocked(group3.id)) { dialClearSession(); return; }
+        var freshTag = noteDialTag(note, group3);
+        if (freshTag) {
+          var wordPool = tagPool(freshTag, group3);
+          if (wordPool) {
+            armPoolColumnDial(wordPool, "noteword_" + note.id, function (val) {
+              noteWordOverride[note.id] = val;
+              if (group3) dialLockedGroups[group3.id] = true; // the force has been shown — dial goes inert until this trick is re-entered
+              if (isMagic() && (!wordPool.columns || wordPool.columns.length < 2)) showToast("Showing: " + val);
+              render();
+            });
+          } else {
+            dialClearSession();
+          }
+        } else {
+          dialClearSession();
+        }
+      }
+
+      document.getElementById("editor-back").addEventListener("click", goBack);
+      document.getElementById("note-title").addEventListener("input", function (e) { note.title = e.target.value; saveState(); });
+      bindNoteMenuButtons();
+      bindAttachments(note);
+
+      var ta = document.getElementById("note-text");
+      var overlay = document.getElementById("body-highlight-overlay");
+      if (overlay) ta.addEventListener("scroll", function () { overlay.scrollTop = ta.scrollTop; overlay.scrollLeft = ta.scrollLeft; });
+      ["mouseup","touchend","keyup","select"].forEach(function (ev) {
+        ta.addEventListener(ev, function () {
+          if (ta.selectionStart !== ta.selectionEnd) { lastSelStart = ta.selectionStart; lastSelEnd = ta.selectionEnd; }
+        });
+      });
+      ta.addEventListener("input", function (e) {
+        var newVal = e.target.value;
+        if (isForcedView) {
+          forceEntry2.overrideText = newVal;
+        } else if (isWordOverrideView) {
+          // Editing while showing the dialed word commits it as a real edit —
+          // the tag's position is no longer reliable once you've typed over it.
+          note.rawText = newVal;
+          note.tags = (note.tags || []).filter(function (t) { return t !== dialTag; });
+          noteWordOverride[note.id] = null;
+          saveState();
+          if (isMagic()) refreshNoteEditor();
+          rearmWordDial();
+        } else {
+          var oldVal = note.rawText;
+          if (newVal !== oldVal) {
+            var edit = diffEdit(oldVal, newVal);
+            var beforeCount = (note.tags || []).length;
+            note.tags = adjustTagsForEdit(note.tags || [], edit);
+            note.rawText = newVal;
+            if (currentGroupId) autoTagPoolWords(findGroup(currentGroupId), note);
+            else autoTagGlobalPoolWords(note);
+            saveState();
+            if (isMagic() && note.tags.length < beforeCount) showToast("Tag removed \u2014 that word changed too much to keep it");
+            if (isMagic()) refreshNoteEditor();
+            rearmWordDial();
+          }
+        }
+      });
+
+      rearmWordDial();
+
+      if (isMagic() && currentGroupId) {
+        document.querySelectorAll("[data-tag-cat]").forEach(function (chip) {
+          chip.addEventListener("mousedown", function (e) { e.preventDefault(); });
+          chip.addEventListener("click", function () {
+            var catId = chip.getAttribute("data-tag-cat");
+            var start = ta.selectionStart, end = ta.selectionEnd;
+            if (start === end) {
+              var hit = (note.tags || []).find(function (t) { return t.categoryId === catId && start >= t.start && start <= t.end; });
+              if (hit) { note.tags = note.tags.filter(function (t) { return t !== hit; }); saveState(); refreshNoteEditor(); rearmWordDial(); return; }
+              start = lastSelStart; end = lastSelEnd;
+            }
+            if (start === end) { showToast("Select a word or phrase first"); return; }
+            var overlap = (note.tags || []).some(function (t) { return !(end <= t.start || start >= t.end); });
+            if (overlap) { showToast("That overlaps an existing tag"); return; }
+            note.tags = note.tags || [];
+            note.tags.push({ start: start, end: end, categoryId: catId });
+            saveState(); refreshNoteEditor(); rearmWordDial();
+          });
+        });
+      }
+    }
+
+    if (route === "listEditor") {
+      var lnote = getNote(currentGroupId, currentNoteId);
+      document.getElementById("editor-back").addEventListener("click", goBack);
+      document.getElementById("note-title").addEventListener("input", function (e) { lnote.title = e.target.value; saveState(); });
+      bindNoteMenuButtons();
+      bindAttachments(lnote);
+      document.querySelectorAll("[data-toggle-item]").forEach(function (el) {
+        el.addEventListener("click", function () {
+          var id = el.getAttribute("data-toggle-item");
+          var item = (lnote.items || []).find(function (it) { return it.id === id; });
+          item.done = !item.done; saveState(); render();
+        });
+      });
+      var forcedPos = listForceTarget[lnote.id];
+      document.querySelectorAll("[data-item-text]").forEach(function (inp) {
+        var itemId = inp.getAttribute("data-item-text");
+        var idx = parseInt(inp.getAttribute("data-item-idx"), 10);
+        var isForcedRow = !!forcedPos && (idx + 1) === forcedPos;
+        inp.addEventListener("input", function () {
+          if (isForcedRow) {
+            listForceOverrideText[lnote.id] = inp.value;
+            return;
+          }
+          var item = (lnote.items || []).find(function (it) { return it.id === itemId; });
+          item.text = inp.value; saveState();
+        });
+        inp.addEventListener("keydown", function (e) {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            var idx = lnote.items.findIndex(function (it) { return it.id === itemId; });
+            var newItem = { id: uid("item"), text: "", done: false };
+            lnote.items.splice(idx + 1, 0, newItem);
+            saveState();
+            focusItemIdAfterRender = newItem.id; focusItemCaretEnd = false;
+            render();
+          } else if (e.key === "Backspace" && inp.value === "" && inp.selectionStart === 0 && inp.selectionEnd === 0) {
+            if (lnote.items.length > 1) {
+              e.preventDefault();
+              var idx2 = lnote.items.findIndex(function (it) { return it.id === itemId; });
+              var prevId = idx2 > 0 ? lnote.items[idx2 - 1].id : null;
+              lnote.items.splice(idx2, 1);
+              saveState();
+              focusItemIdAfterRender = prevId; focusItemCaretEnd = true;
+              render();
+            }
+          }
+        });
+      });
+      if (focusItemIdAfterRender) {
+        var toFocus = document.querySelector('[data-item-text="' + focusItemIdAfterRender + '"]');
+        if (toFocus) {
+          toFocus.focus();
+          if (focusItemCaretEnd) { var L = toFocus.value.length; toFocus.setSelectionRange(L, L); }
+        }
+        focusItemIdAfterRender = null; focusItemCaretEnd = false;
+      }
+      if (lnote.listForce && lnote.listForce.armed) armListForceDial(lnote);
+      else dialClearSession();
+    }
+
+    if (route === "listForceSetup") {
+      var lfNote = getNote(currentGroupId, currentNoteId);
+      document.getElementById("lf-setup-back").addEventListener("click", goBack);
+      document.getElementById("lf-word").addEventListener("input", function (e) {
+        lfNote.listForce.word = e.target.value;
+        saveState();
+        var armedToggle = document.getElementById("lf-armed");
+        var ready = !!e.target.value.trim();
+        armedToggle.disabled = !ready;
+        if (!ready) { armedToggle.checked = false; lfNote.listForce.armed = false; }
+      });
+      document.getElementById("lf-armed").addEventListener("change", function (e) { lfNote.listForce.armed = e.target.checked; saveState(); });
+    }
+
+    if (route === "poolsList") {
+      document.getElementById("pools-back").addEventListener("click", goBack);
+      document.getElementById("add-pool-btn").addEventListener("click", function () { poolFabMenuOpen = true; render(); });
+      document.querySelectorAll("[data-pool]").forEach(function (card) {
+        card.addEventListener("click", function () { openPoolEdit(card.getAttribute("data-pool")); });
+      });
+      var poolFabBackdrop = document.getElementById("pool-fab-backdrop");
+      if (poolFabBackdrop) poolFabBackdrop.addEventListener("click", function () { poolFabMenuOpen = false; render(); });
+      document.querySelectorAll("[data-add-pool-type]").forEach(function (pill) {
+        pill.addEventListener("click", function () { addPoolFromTemplate(pill.getAttribute("data-add-pool-type")); });
+      });
+    }
+
+    if (route === "poolEdit") {
+      var pool = findPool(currentPoolId);
+      var isMulti = !!(pool.columns && pool.columns.length >= 2);
+      document.getElementById("pool-edit-back").addEventListener("click", goBack);
+      document.getElementById("pool-name").addEventListener("input", function (e) { pool.name = e.target.value; saveState(); });
+      document.getElementById("pool-multi-toggle").addEventListener("change", function (e) {
+        if (e.target.checked) {
+          pool.columns = [{ name: "", values: (pool.values || []).slice() }, { name: "", values: [] }];
+        } else {
+          pool.columns = null;
+        }
+        saveState(); render();
+      });
+
+      if (!isMulti) {
+        document.querySelectorAll("[data-drag-id^='val:']").forEach(function (row) {
+          attachCardGesture(row, {
+            dragId: row.getAttribute("data-drag-id"),
+            handleSelector: ".drag-handle",
+            onReorder: function (draggedId, targetId) { reorderPoolValues(pool, draggedId, targetId); }
+          });
+        });
+        document.querySelectorAll("[data-del-value]").forEach(function (b) {
+          b.addEventListener("click", function () {
+            var idx = parseInt(b.getAttribute("data-del-value"), 10);
+            pool.values.splice(idx, 1);
+            saveState(); render();
+          });
+        });
+        document.getElementById("add-pool-value-btn").addEventListener("click", function () {
+          var input = document.getElementById("new-pool-value");
+          var val = input.value.trim();
+          if (!val) return;
+          var dup = pool.values.some(function (v) { return v.toLowerCase() === val.toLowerCase(); });
+          if (dup) { showToast("Already in this pool"); return; }
+          var conflict = poolValueConflict(pool.id, val);
+          if (conflict) { showToast('"' + val + '" is already in "' + conflict.name + '"'); return; }
+          pool.values.push(val);
+          saveState();
+          input.value = "";
+          render();
+        });
+      } else {
+        document.querySelectorAll("[data-drag-id^='colval:']").forEach(function (row) {
+          attachCardGesture(row, {
+            dragId: row.getAttribute("data-drag-id"),
+            handleSelector: ".drag-handle",
+            onReorder: function (draggedId, targetId) { reorderPoolColumnValues(pool, draggedId, targetId); }
+          });
+        });
+        document.getElementById("add-column-btn").addEventListener("click", function () {
+          pool.columns.push({ name: "", values: [] });
+          saveState(); render();
+        });
+        document.querySelectorAll("[data-del-column]").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            var ci = parseInt(btn.getAttribute("data-del-column"), 10);
+            pool.columns.splice(ci, 1);
+            if (pool.columns.length < 2) pool.columns = null;
+            saveState(); render();
+          });
+        });
+        document.querySelectorAll("[data-col-name]").forEach(function (inp) {
+          var ci = parseInt(inp.getAttribute("data-col-name"), 10);
+          inp.addEventListener("input", function () { pool.columns[ci].name = inp.value; saveState(); });
+        });
+        document.querySelectorAll("[data-add-col-value]").forEach(function (btn) {
+          var ci = parseInt(btn.getAttribute("data-add-col-value"), 10);
+          btn.addEventListener("click", function () {
+            var input = document.querySelector('[data-new-col-value="' + ci + '"]');
+            var val = input.value.trim();
+            if (!val) return;
+            var dup = pool.columns[ci].values.some(function (v) { return v.toLowerCase() === val.toLowerCase(); });
+            if (dup) { showToast("Already in this column"); return; }
+            var conflict = poolValueConflict(pool.id, val);
+            if (conflict) { showToast('"' + val + '" is already in "' + conflict.name + '"'); return; }
+            pool.columns[ci].values.push(val);
+            saveState();
+            input.value = "";
+            render();
+          });
+        });
+        document.querySelectorAll("[data-del-col-value]").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            var parts = btn.getAttribute("data-del-col-value").split(":");
+            var ci = parseInt(parts[0], 10), vi = parseInt(parts[1], 10);
+            pool.columns[ci].values.splice(vi, 1);
+            saveState(); render();
+          });
+        });
+        document.getElementById("pool-separator").addEventListener("input", function (e) {
+          pool.columnSeparator = e.target.value; saveState();
+        });
+      }
+
+      document.getElementById("delete-pool-btn").addEventListener("click", function () {
+        showConfirm("Delete this pool? Any category using it will be unlinked.", function () { deletePool(currentPoolId); goBack(); });
+      });
+    }
+
+    if (route === "settingsMenu") {
+      document.getElementById("settings-menu-back").addEventListener("click", goBack);
+      document.querySelectorAll("[data-settings-nav]").forEach(function (row) {
+        row.addEventListener("click", function () {
+          var target = row.getAttribute("data-settings-nav");
+          if (target === "pools") openPoolsList();
+          else if (target === "dial") openSettings();
+          else if (target === "exportimport") { exportImportOutput = ""; openExportImport(); }
+        });
+      });
+    }
+
+    if (route === "exportImport") {
+      document.getElementById("exportimport-back").addEventListener("click", goBack);
+      function checkedGroupIds() {
+        return Array.from(document.querySelectorAll("[data-export-group]:checked")).map(function (b) { return b.getAttribute("data-export-group"); });
+      }
+      var downloadBtn = document.getElementById("export-download-btn");
+      if (downloadBtn) downloadBtn.addEventListener("click", function () {
+        var checked = checkedGroupIds();
+        var payload = buildExportPayload(checked.length ? checked : null);
+        var text = exportPayloadToText(payload);
+        var fname = checked.length === 1 ? safeFilename(findGroup(checked[0]).title) + ".json" : "notary-export.json";
+        downloadsNS.save({ filename: fname, data: text })
+          .then(function (r) { showToast(r.status === "saved" ? "Saved" : "Sent"); })
+          .catch(function (err) { if (err && err.code !== "declined") showToast("Couldn't save \u2014 try the text option below"); });
+      });
+      document.getElementById("export-generate-btn").addEventListener("click", function () {
+        var checked = checkedGroupIds();
+        exportImportOutput = exportPayloadToText(buildExportPayload(checked.length ? checked : null));
+        render();
+      });
+      var copyBtn = document.getElementById("export-copy-btn");
+      if (copyBtn) copyBtn.addEventListener("click", function () {
+        var ta = document.getElementById("export-output");
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(ta.value).then(function () { showToast("Copied"); }).catch(function () { ta.select(); showToast("Select failed \u2014 copy manually"); });
+        } else { ta.select(); showToast("Selected \u2014 copy with your keyboard"); }
+      });
+      document.getElementById("import-file-btn").addEventListener("click", function () {
+        document.getElementById("import-file-input").click();
+      });
+      document.getElementById("import-file-input").addEventListener("change", function (e) {
+        var file = e.target.files && e.target.files[0];
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function () {
+          var result = importPayloadFromText(String(reader.result || ""));
+          if (!result.ok) { showToast(result.error); return; }
+          showToast("Imported " + result.count + " trick" + (result.count === 1 ? "" : "s"));
+          render();
+        };
+        reader.onerror = function () { showToast("Couldn't read that file"); };
+        reader.readAsText(file);
+      });
+      document.getElementById("import-run-btn").addEventListener("click", function () {
+        var text = document.getElementById("import-input").value.trim();
+        if (!text) { showToast("Paste export text first"); return; }
+        var result = importPayloadFromText(text);
+        if (!result.ok) { showToast(result.error); return; }
+        showToast("Imported " + result.count + " trick" + (result.count === 1 ? "" : "s"));
+        render();
+      });
+    }
+
+    if (route === "exportScreen") {
+      document.getElementById("export-screen-back").addEventListener("click", goBack);
+      var screenDownloadBtn = document.getElementById("export-screen-download-btn");
+      if (screenDownloadBtn) screenDownloadBtn.addEventListener("click", function () {
+        var group = exportScreenGroupId ? findGroup(exportScreenGroupId) : null;
+        var text = document.getElementById("export-screen-output").value;
+        var fname = group ? safeFilename(group.title) + ".json" : "notary-export.json";
+        downloadsNS.save({ filename: fname, data: text })
+          .then(function (r) { showToast(r.status === "saved" ? "Saved" : "Sent"); })
+          .catch(function (err) { if (err && err.code !== "declined") showToast("Couldn't save \u2014 try copying the text instead"); });
+      });
+      document.getElementById("export-screen-copy-btn").addEventListener("click", function () {
+        var ta = document.getElementById("export-screen-output");
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(ta.value).then(function () { showToast("Copied"); }).catch(function () { ta.select(); showToast("Select failed \u2014 copy manually"); });
+        } else { ta.select(); showToast("Selected \u2014 copy with your keyboard"); }
+      });
+    }
+
+    if (route === "settings") {
+      document.getElementById("settings-back").addEventListener("click", function () { dialClearSession(); goBack(); });
+      document.getElementById("dial-enabled").addEventListener("change", function () { toggleDialEnabled(); });
+      document.querySelectorAll('input[name="dialmode"]').forEach(function (r) {
+        r.addEventListener("change", function () { state.dialSettings.inputMode = r.value; saveState(); });
+      });
+      document.getElementById("dial-haptics").addEventListener("change", function (e) { state.dialSettings.haptics = e.target.checked; saveState(); });
+      document.getElementById("dial-invert").addEventListener("change", function (e) { state.dialSettings.invertDrag = e.target.checked; saveState(); });
+      document.getElementById("dial-hold").addEventListener("input", function (e) {
+        state.dialSettings.holdMs = parseInt(e.target.value, 10);
+        saveState();
+        document.getElementById("dial-hold-label").textContent = state.dialSettings.holdMs + "ms \u2014 how long you have to hold the edge before the dial opens.";
+      });
+      document.getElementById("dial-speed").addEventListener("input", function (e) {
+        state.dialSettings.cycleSpeedMs = parseInt(e.target.value, 10);
+        saveState();
+        document.getElementById("dial-speed-label").textContent = state.dialSettings.cycleSpeedMs + "ms per step in auto-cycle. Higher is slower.";
+      });
+      document.getElementById("dial-haptic-strength").addEventListener("input", function (e) {
+        state.dialSettings.hapticStrength = parseInt(e.target.value, 10);
+        saveState();
+        document.getElementById("dial-strength-label").textContent = state.dialSettings.hapticStrength + "ms buzz per step. Actual feel varies by device.";
+        dialVibrate();
+      });
+      var poolSel = document.getElementById("dial-demo-pool");
+      poolSel.addEventListener("change", function () {
+        dialDemoPoolId = poolSel.value || null;
+        dialDemoValue = "";
+        render();
+      });
+      if (dialDemoPoolId) {
+        var demoPool = findPool(dialDemoPoolId);
+        if (demoPool) {
+          armPoolColumnDial(demoPool, "demo", function (val) {
+            dialDemoValue = val; render();
+          });
+        }
+      }
+    }
+
+    if (route === "drawingEditor") {
+      var dnote = getNote(currentGroupId, currentNoteId);
+      document.getElementById("editor-back").addEventListener("click", goBack);
+      document.getElementById("note-title").addEventListener("input", function (e) { dnote.title = e.target.value; saveState(); });
+      bindNoteMenuButtons();
+      bindAttachments(dnote);
+      var canvas = document.getElementById("draw-canvas");
+      var rect = canvas.getBoundingClientRect();
+      canvas.width = Math.max(1, Math.round(rect.width));
+      canvas.height = Math.max(1, Math.round(rect.height));
+      var ctx = canvas.getContext("2d");
+      ctx.lineWidth = 3; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#202124";
+      if (dnote.drawingData) {
+        var img = new Image();
+        img.onload = function () { ctx.drawImage(img, 0, 0, canvas.width, canvas.height); };
+        img.src = dnote.drawingData;
+      }
+      var drawing = false;
+      function pos(e) { var r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+      canvas.addEventListener("pointerdown", function (e) { drawing = true; var p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); });
+      canvas.addEventListener("pointermove", function (e) { if (!drawing) return; var p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); });
+      ["pointerup","pointerleave","pointercancel"].forEach(function (ev) {
+        canvas.addEventListener(ev, function () {
+          if (drawing) { drawing = false; dnote.drawingData = canvas.toDataURL("image/png"); saveState(); }
+        });
+      });
+      document.getElementById("clear-drawing-btn").addEventListener("click", function () {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        dnote.drawingData = null; saveState();
+      });
+    }
+
+    bindFabMenu(); bindNoteMenu(); bindMoveMenu();
+  }
+
+  window.addEventListener("popstate", function () { goBack(); });
+  try { history.replaceState({ depth: 0 }, "", ""); } catch (e) {}
+  render();
+})();
+</script>
+</body>
+</html>
