@@ -31,7 +31,7 @@
   #app { height:100%; display:flex; flex-direction:column; position:relative; }
   .screen { position:absolute; inset:0; display:flex; flex-direction:column; background:var(--bg); }
 
-  header { padding:14px 14px 10px; display:flex; align-items:center; gap:10px; flex-shrink:0; min-height:34px; }
+  header { box-sizing:border-box; height:64px; padding:14px 14px 10px; display:flex; align-items:center; gap:10px; flex-shrink:0; }
   header h1 { font-size:19px; font-weight:500; margin:0; user-select:none; flex-shrink:0; line-height:1; display:flex; align-items:center; }
   .mode-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-left:7px; vertical-align:middle; }
   .back-btn { background:none; border:none; color:var(--text); font-size:20px; cursor:pointer; padding:4px 8px;
@@ -51,6 +51,13 @@
   .photo-slide { position:relative; flex:0 0 100%; scroll-snap-align:start; cursor:zoom-in; }
   .photo-slide img { width:100%; max-height:340px; object-fit:cover; display:block; border-radius:12px; }
   .photo-remove { position:absolute; top:8px; right:8px; width:28px; height:28px; border-radius:50%; background:rgba(0,0,0,0.55); color:#fff; border:none; font-size:16px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .photo-tag-btn { position:absolute; bottom:8px; left:8px; width:26px; height:26px; border-radius:50%;
+    background:rgba(0,0,0,0.45); border:2px solid rgba(255,255,255,0.85); color:#fff; font-size:12px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; }
+  .photo-tag-btn.active { outline:3px solid var(--accent); outline-offset:1px; }
+  .photo-slide-text { display:flex; align-items:center; justify-content:center; min-height:180px;
+    background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; box-sizing:border-box; }
+  .photo-slide-text-inner { font-size:22px; font-weight:600; text-align:center; color:var(--text); word-break:break-word; }
   .photo-dots { display:flex; justify-content:center; gap:6px; margin-top:8px; }
   .photo-dot { width:6px; height:6px; border-radius:50%; background:var(--border); }
   .photo-dot.active { background:var(--accent); }
@@ -270,6 +277,8 @@
   // glyph with a shaft, used for every back button in the app.
   var BACK_ARROW_SVG = '<svg class="back-icon" viewBox="0 0 10 16" width="10" height="16" fill="none" aria-hidden="true">' +
     '<path d="M8 1.5L2 8L8 14.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var SETTINGS_GEAR_SVG = '<svg viewBox="0 0 24 24" width="19" height="19" fill="currentColor" aria-hidden="true">' +
+    '<path d="M19.14,12.94c0.04,-0.3 0.06,-0.61 0.06,-0.94c0,-0.32 -0.02,-0.64 -0.07,-0.94l2.03,-1.58c0.18,-0.14 0.23,-0.41 0.12,-0.61l-1.92,-3.32c-0.12,-0.22 -0.37,-0.29 -0.59,-0.22l-2.39,0.96c-0.5,-0.38 -1.03,-0.7 -1.62,-0.94L14.4,2.81c-0.04,-0.24 -0.24,-0.41 -0.48,-0.41h-3.84c-0.24,0 -0.43,0.17 -0.47,0.41L9.25,5.35C8.66,5.59 8.12,5.92 7.63,6.29L5.24,5.33c-0.22,-0.08 -0.47,0 -0.59,0.22L2.74,8.87C2.62,9.08 2.66,9.34 2.86,9.48l2.03,1.58C4.84,11.36 4.8,11.69 4.8,12s0.02,0.64 0.07,0.94l-2.03,1.58c-0.18,0.14 -0.23,0.41 -0.12,0.61l1.92,3.32c0.12,0.22 0.37,0.29 0.59,0.22l2.39,-0.96c0.5,0.38 1.03,0.7 1.62,0.94l0.36,2.54c0.05,0.24 0.24,0.41 0.48,0.41h3.84c0.24,0 0.44,-0.17 0.47,-0.41l0.36,-2.54c0.59,-0.24 1.13,-0.56 1.62,-0.94l2.39,0.96c0.22,0.08 0.47,0 0.59,-0.22l1.92,-3.32c0.12,-0.22 0.07,-0.47 -0.12,-0.61L19.14,12.94z M12,15.6c-1.98,0 -3.6,-1.62 -3.6,-3.6s1.62,-3.6 3.6,-3.6s3.6,1.62 3.6,3.6S13.98,15.6 12,15.6z"/></svg>';
   var TRICK_COLORS = ["#FFFFFF","#F28B82","#FBBC04","#FFF475","#CCFF90","#A7FFEB","#CBF0F8","#AECBFA","#D7AEFB"];
   var CATEGORY_PALETTE = ["#AECBFA","#CBF0F8","#D7AEFB","#CCFF90","#FDCFE8","#FFF475","#F28B82","#A7FFEB"];
 
@@ -293,6 +302,9 @@
     if (!n.type) n.type = "text";
     if (typeof n.title !== "string") n.title = "";
     if (!Array.isArray(n.images)) n.images = [];
+    // An image can be tagged to a category too, the same idea as tagging a word in text:
+    // when that category fires, the tagged image is swapped for whatever it forces.
+    n.images.forEach(function (img) { if (typeof img.taggedCategoryId !== "string") img.taggedCategoryId = null; });
     if (n.type === "text") {
       if (typeof n.rawText !== "string") n.rawText = "";
       if (typeof n.textAfter !== "string") n.textAfter = "";
@@ -383,6 +395,7 @@
   var dialDemoPoolId = null, dialDemoValue = "";
   var dialedPoolValue = {}; // groupId -> currently loaded pool value for that trick's dial (resets on entering the group)
   var noteWordOverride = {}; // noteId -> live dial override for that note's one dial-able tagged word (resets on entering the note)
+  var selectedImageForTag = null; // an inserted photo's id while its category picker (the tag chip bar) is open, or null
   var multiSelectActive = false, multiSelectIds = {}, multiSelectContext = null; // context: null = Home standalone notes, or a groupId
   var reorderModeActive = false, reorderModeContext = null; // same context convention as multiSelectContext; whole-card drag, no tap/long-press
   var moveMenuBatchMode = false;
@@ -459,7 +472,7 @@
       dialSetSession(function () {
         var vals = pool.values || [];
         return vals.length ? vals : ["(pool is empty)"];
-      }, function (val) { onFullValue(val); }, sessionKey);
+      }, function (val) { onFullValue(val); render(); }, sessionKey);
       return;
     }
     var totalCols = pool.columns.length;
@@ -489,6 +502,32 @@
       parts.push('<span class="dial-active-digit">' + esc(candidateVal) + '</span>');
       for (var i = progress.length + 1; i < totalCols; i++) parts.push('<span class="dial-placeholder-digit">\u2022</span>');
       return parts.join(esc(sep));
+    });
+  }
+
+  var groupDialCatIndex = {}; // groupId -> index (into groupPoolLinkedCategories order) of the category currently being dialed
+  // Dials a trick's pool-linked categories one at a time, in the order they're listed in
+  // Trick setup. Each hold advances one step: for a category on a plain pool that's one
+  // hold; for a category on a multi-column pool it's one hold per column, exactly like
+  // armPoolColumnDial already does on its own. Once every category has a value, the next
+  // hold loops back to the first category so the whole sequence can be redialed from scratch.
+  function armGroupDial(group) {
+    var cats = groupPoolLinkedCategories(group);
+    if (!cats.length) { dialClearSession(); return; }
+    var idx = (groupDialCatIndex[group.id] || 0) % cats.length;
+    var cat = cats[idx];
+    var pool = findPool(cat.poolId);
+    if (!pool) { dialClearSession(); return; }
+    armPoolColumnDial(pool, group.id + ":" + cat.id, function (val) {
+      dialedPoolValue[group.id] = dialedPoolValue[group.id] || {};
+      dialedPoolValue[group.id][cat.id] = val;
+      groupDialCatIndex[group.id] = idx + 1;
+      if (isMagic() && (!pool.columns || pool.columns.length < 2)) {
+        var isLast = idx + 1 >= cats.length;
+        var next = isLast ? null : cats[idx + 1];
+        showToast("Loaded " + (cat.name || "value") + ": " + poolValueLabel(val) +
+          (isLast ? " \u2014 all set" : " \u2014 next: " + (next.name || "next category")));
+      }
     });
   }
 
@@ -570,8 +609,10 @@
     });
     return found;
   }
-  function groupPoolLinkedCategory(group) {
-    return group.categories.find(function (c) { return c.poolId; });
+  // Every pool-linked category in a trick, in the order they're listed in Trick setup —
+  // that order is also the dial order: hold an edge once per category, in this sequence.
+  function groupPoolLinkedCategories(group) {
+    return (group.categories || []).filter(function (c) { return c.poolId; });
   }
   // The one tagged word in this note (if any) that belongs to the group's
   // pool-linked category — earliest occurrence wins if there's more than one.
@@ -593,10 +634,8 @@
     return rawText.slice(0, tag.start) + overrideValue + rawText.slice(tag.end);
   }
   function linkPoolToCategory(group, category, poolId) {
-    if (poolId) {
-      var conflict = group.categories.find(function (c) { return c.id !== category.id && c.poolId; });
-      if (conflict) return { ok: false, conflictName: conflict.name };
-    }
+    // A trick can have several pool-linked categories at once (e.g. star sign + card).
+    // Each dials separately, in the order its category is listed in Trick setup.
     category.poolId = poolId || null;
     saveState();
     return { ok: true };
@@ -782,33 +821,35 @@
   // select-and-tap needed for pool words specifically.
   function autoTagPoolWords(group, note) {
     if (!group) return;
-    var cat = groupPoolLinkedCategory(group);
-    if (!cat) return;
-    var pool = findPool(cat.poolId);
-    var poolValues = pool ? poolCombinedValues(pool) : [];
-    if (!pool || !poolValues.length) return;
+    var cats = groupPoolLinkedCategories(group);
+    if (!cats.length) return;
     var text = note.rawText;
     note.tags = note.tags || [];
     function overlapsExisting(start, end) {
       return note.tags.some(function (t) { return !(end <= t.start || start >= t.end); });
     }
     function isWordChar(ch) { return !!ch && /[a-z0-9]/i.test(ch); }
-    poolValues.forEach(function (val) {
-      if (isImageValue(val)) return; // nothing to auto-detect in note text for an image value
-      var alreadyTaggedHere = note.tags.some(function (t) {
-        return t.categoryId === cat.id && text.slice(t.start, t.end).toLowerCase() === val.toLowerCase();
-      });
-      if (alreadyTaggedHere) return;
-      var lowerText = text.toLowerCase(), lowerVal = val.toLowerCase();
-      var idx = lowerText.indexOf(lowerVal);
-      while (idx !== -1) {
-        var end = idx + val.length;
-        if (!isWordChar(text[idx - 1]) && !isWordChar(text[end]) && !overlapsExisting(idx, end)) {
-          note.tags.push({ start: idx, end: end, categoryId: cat.id });
-          return;
+    cats.forEach(function (cat) {
+      var pool = findPool(cat.poolId);
+      var poolValues = pool ? poolCombinedValues(pool) : [];
+      if (!pool || !poolValues.length) return;
+      poolValues.forEach(function (val) {
+        if (isImageValue(val)) return; // nothing to auto-detect in note text for an image value
+        var alreadyTaggedHere = note.tags.some(function (t) {
+          return t.categoryId === cat.id && text.slice(t.start, t.end).toLowerCase() === val.toLowerCase();
+        });
+        if (alreadyTaggedHere) return;
+        var lowerText = text.toLowerCase(), lowerVal = val.toLowerCase();
+        var idx = lowerText.indexOf(lowerVal);
+        while (idx !== -1) {
+          var end = idx + val.length;
+          if (!isWordChar(text[idx - 1]) && !isWordChar(text[end]) && !overlapsExisting(idx, end)) {
+            note.tags.push({ start: idx, end: end, categoryId: cat.id });
+            return;
+          }
+          idx = lowerText.indexOf(lowerVal, idx + 1);
         }
-        idx = lowerText.indexOf(lowerVal, idx + 1);
-      }
+      });
     });
   }
   // Standalone notes have no group/category — scan every pool that exists
@@ -1219,7 +1260,11 @@
   function openGroupView(id) {
     navigate(function () {
       currentGroupId = id; lastActiveGroupId = id; sessionCounts[id] = 0; sessionForced[id] = {};
-      dialedPoolValue[id] = null; columnDialProgress[id] = []; dialLockedGroups[id] = false;
+      dialedPoolValue[id] = {}; groupDialCatIndex[id] = 0; dialLockedGroups[id] = false;
+      // Column progress is keyed per category (id:catId) since each pool-linked category
+      // dials independently — clear every one of this group's, not just a single group-level key.
+      var enteringGroup = findGroup(id);
+      if (enteringGroup) (enteringGroup.categories || []).forEach(function (c) { delete columnDialProgress[id + ":" + c.id]; });
       route = "groupView";
     });
   }
@@ -1228,6 +1273,7 @@
       var note = getNote(groupId, noteId);
       currentGroupId = groupId; currentNoteId = noteId;
       editorUseForceOverlay = !!useForceOverlay;
+      selectedImageForTag = null;
       if (note.type === "list") {
         route = "listEditor";
         listForceDigits[note.id] = [];
@@ -1251,10 +1297,14 @@
       if (candidates.length && note.type === "text") {
         var noteCatIds = {};
         buildTokens(note).forEach(function (t) { if (t.type === "tag") noteCatIds[t.categoryId] = true; });
+        (note.images || []).forEach(function (im) { if (im.taggedCategoryId) noteCatIds[im.taggedCategoryId] = true; });
         var matching = candidates.filter(function (c) { return noteCatIds[c.id]; }).map(function (c) {
           if (!c.poolId) return { categoryId: c.id, word: c.word, replaceAll: c.replaceAll };
-          var dialed = dialedPoolValue[groupId];
-          if (!dialed) return null; // nothing dialed yet — this category can't fire
+          // Each pool-linked category keeps its own dialed value now that a trick can have
+          // several (e.g. star sign + card) — this one just needs its own slot filled in.
+          var dialedForGroup = dialedPoolValue[groupId];
+          var dialed = dialedForGroup ? dialedForGroup[c.id] : null;
+          if (dialed == null) return null; // nothing dialed yet for this category — it can't fire
           return { categoryId: c.id, word: dialed, replaceAll: c.replaceAll };
         }).filter(function (c) { return c; });
         if (matching.length) {
@@ -1917,7 +1967,7 @@
       '<div class="screen">' +
         '<header><h1 id="home-title">notary<span class="title-dot' + (dialTellLocked() ? " locked" : "") + '">.</span>' + (isMagic() ? '<span class="mode-dot" style="background:var(--accent);"></span>' : "") + '</h1>' +
           '<input type="text" id="home-search" class="header-search" placeholder="Search Notes" value="' + esc(homeSearchQuery) + '">' +
-          (isMagic() ? '<button class="icon-btn" id="settings-open-btn">\u2699</button>' : "") +
+          (isMagic() ? '<button class="icon-btn" id="settings-open-btn">' + SETTINGS_GEAR_SVG + '</button>' : "") +
         '</header>' +
         '<div class="body-scroll"><div class="grid">' + cards + '</div></div>' +
         (multiSelectActive || reorderModeActive ? "" : '<button class="fab" id="add-fab">+</button>') +
@@ -1967,7 +2017,7 @@
       }).join("") || '<div class="field-hint">No categories yet \u2014 add one below.</div>';
 
       var poolHint = state.pools.length
-        ? '<div class="field-hint">Type a pool\u2019s name as the category name to link it live \u2014 only one category per trick may be pool-linked at a time. Manage pools from Settings.</div>'
+        ? '<div class="field-hint">Type a pool\u2019s name as the category name to link it live \u2014 link as many categories to different pools as you like. Each one dials separately, in the order it\u2019s listed above (drag to reorder). Manage pools from Settings.</div>'
         : '<div class="field-hint">No pools created yet \u2014 make one from Settings to link it here.</div>';
 
       forceSection =
@@ -2016,18 +2066,29 @@
       return noteCardHtml(n, group.previewRows, 'data-drag-id="' + n.id + '"', !!multiSelectIds[n.id], isMagic() && !noteHasForceableTag(n, group), groupViewReorder);
     }).join("");
     if (!cards) cards = '<div class="empty">No notes yet.<br>Tap + to add one.</div>';
-    var dialRule = groupPoolLinkedCategory(group);
+    var dialCats = groupPoolLinkedCategories(group);
     var dialStatus = "";
-    if (isMagic() && dialRule) {
-      var loaded = dialedPoolValue[currentGroupId];
-      dialStatus = '<div class="field-hint" style="padding:0 12px;">Dial armed' +
-        (loaded ? " \u2014 loaded: " + esc(poolValueLabel(loaded)) : " \u2014 nothing loaded yet, hold an edge") + '</div>';
+    if (isMagic() && dialCats.length) {
+      var loadedMap = dialedPoolValue[currentGroupId] || {};
+      if (dialCats.length === 1) {
+        var loaded = loadedMap[dialCats[0].id];
+        dialStatus = '<div class="field-hint" style="padding:0 12px;">Dial armed' +
+          (loaded != null ? " \u2014 loaded: " + esc(poolValueLabel(loaded)) : " \u2014 nothing loaded yet, hold an edge") + '</div>';
+      } else {
+        // Several pools in this trick: hold once per category, in the order they're
+        // listed in Trick setup \u2014 show each one's progress so it's clear what's next.
+        var lines = dialCats.map(function (c) {
+          var v = loadedMap[c.id];
+          return esc(c.name || "Category") + ": " + (v != null ? esc(poolValueLabel(v)) : "not yet loaded");
+        }).join(" \u00b7 ");
+        dialStatus = '<div class="field-hint" style="padding:0 12px;">Dial armed \u2014 ' + lines + '</div>';
+      }
     }
     return (
       '<div class="screen">' +
         '<header><button class="back-btn" id="groupview-back">' + BACK_ARROW_SVG + '</button>' +
           '<input type="text" id="groupview-title" class="groupview-title-input" value="' + esc(group.title) + '">' +
-          '<button class="icon-btn" id="groupview-settings-btn">\u2699</button>' +
+          '<button class="icon-btn" id="groupview-settings-btn">' + SETTINGS_GEAR_SVG + '</button>' +
         '</header>' +
         dialStatus +
         '<div class="body-scroll"><div class="grid">' + cards + '</div></div>' +
@@ -2041,21 +2102,53 @@
   function editorMenuBtnHtml() {
     return '<button class="fab-secondary" id="note-menu-open-btn" data-menu-note="' + currentNoteId + '" data-menu-group="' + (currentGroupId || "") + '">\u22EE</button>';
   }
+  // An inserted photo can be tagged to a category, the same idea as tagging a word in
+  // text: when that category fires, the tagged photo is swapped for whatever it forces
+  // \u2014 another image, or (if the pool value is plain text) that text shown in its place.
+  // forceRules, when given, is the active force's rule list (note is being viewed forced);
+  // with no forceRules, every photo shows as inserted and stays editable/removable/taggable.
+  function resolvedImageSlides(note, forceRules) {
+    return (note.images || []).map(function (img) {
+      if (forceRules && img.taggedCategoryId) {
+        var rule = forceRules.find(function (r) { return r.categoryId === img.taggedCategoryId; });
+        if (rule) {
+          return isImageValue(rule.word)
+            ? { kind: "image", dataUrl: rule.word.dataUrl, srcImage: img }
+            : { kind: "text", text: rule.word, srcImage: img };
+        }
+      }
+      return { kind: "image", dataUrl: img.dataUrl, srcImage: img };
+    });
+  }
   // Photos render large and inline in the note itself (not a strip of tiny thumbnails),
   // as a single big image or, with more than one, a swipeable carousel with dots \u2014 tapping
   // any of them opens the full-screen zoom viewer.
-  function renderAttachmentsHtml(note) {
-    var images = note.images || [];
+  function renderAttachmentsHtml(note, group, forceRules) {
+    var slidesData = resolvedImageSlides(note, forceRules);
+    var editable = !forceRules; // viewing a forced note is read-only for attachments too
+    var cats = (group && group.categories) || [];
     var photosBlock = "";
-    if (images.length) {
-      var slides = images.map(function (img, idx) {
-        return '<div class="photo-slide" data-view-photo="' + idx + '">' +
-            '<img src="' + img.dataUrl + '">' +
-            '<button class="photo-remove" data-remove-photo="' + img.id + '">\u00D7</button>' +
+    if (slidesData.length) {
+      var imgIdx = 0;
+      var slides = slidesData.map(function (s) {
+        if (s.kind === "text") {
+          return '<div class="photo-slide photo-slide-text"><div class="photo-slide-text-inner">' + esc(s.text) + '</div></div>';
+        }
+        var thisIdx = imgIdx++;
+        var taggedCat = s.srcImage.taggedCategoryId ? cats.find(function (c) { return c.id === s.srcImage.taggedCategoryId; }) : null;
+        var tagBtn = (editable && isMagic() && cats.length)
+          ? '<button class="photo-tag-btn' + (selectedImageForTag === s.srcImage.id ? " active" : "") + '" data-tag-photo="' + s.srcImage.id + '"' +
+              (taggedCat ? ' style="background:' + taggedCat.color + ';"' : '') +
+              ' title="' + (taggedCat ? "Tagged: " + esc(taggedCat.name) : "Tag this image for a force") + '">\u25C9</button>'
+          : "";
+        return '<div class="photo-slide" data-view-photo="' + thisIdx + '">' +
+            '<img src="' + s.dataUrl + '">' +
+            (editable ? '<button class="photo-remove" data-remove-photo="' + s.srcImage.id + '">\u00D7</button>' : "") +
+            tagBtn +
           '</div>';
       }).join("");
-      var dots = images.length > 1
-        ? '<div class="photo-dots">' + images.map(function (_, idx) { return '<div class="photo-dot' + (idx === 0 ? " active" : "") + '" data-dot="' + idx + '"></div>'; }).join("") + '</div>'
+      var dots = slidesData.length > 1
+        ? '<div class="photo-dots">' + slidesData.map(function (_, idx) { return '<div class="photo-dot' + (idx === 0 ? " active" : "") + '" data-dot="' + idx + '"></div>'; }).join("") + '</div>'
         : "";
       photosBlock = '<div class="photo-carousel-wrap">' +
           '<div class="photo-carousel" id="photo-carousel">' + slides + '</div>' +
@@ -2064,10 +2157,11 @@
     }
     return (
       photosBlock +
-      '<input type="file" accept="image/*" id="photo-input" style="display:none;">'
+      (editable ? '<input type="file" accept="image/*" id="photo-input" style="display:none;">' : "")
     );
   }
-  function bindAttachments(note) {
+  function bindAttachments(note, group, forceRules) {
+    var editable = !forceRules;
     var photoInput = document.getElementById("photo-input");
     if (photoInput) {
       photoInput.addEventListener("change", function (e) {
@@ -2085,7 +2179,7 @@
             canvas.getContext("2d").drawImage(img, 0, 0, w, h);
             var dataUrl = canvas.toDataURL("image/jpeg", 0.88);
             note.images = note.images || [];
-            note.images.push({ id: uid("img"), dataUrl: dataUrl });
+            note.images.push({ id: uid("img"), dataUrl: dataUrl, taggedCategoryId: null });
             saveState(); render();
           };
           img.src = ev.target.result;
@@ -2093,19 +2187,32 @@
         reader.readAsDataURL(file);
       });
     }
-    document.querySelectorAll("[data-remove-photo]").forEach(function (b) {
-      b.addEventListener("click", function (e) {
-        e.stopPropagation();
-        var id = b.getAttribute("data-remove-photo");
-        note.images = (note.images || []).filter(function (i) { return i.id !== id; });
-        saveState(); render();
+    if (editable) {
+      document.querySelectorAll("[data-remove-photo]").forEach(function (b) {
+        b.addEventListener("click", function (e) {
+          e.stopPropagation();
+          var id = b.getAttribute("data-remove-photo");
+          note.images = (note.images || []).filter(function (i) { return i.id !== id; });
+          if (selectedImageForTag === id) selectedImageForTag = null;
+          saveState(); render();
+        });
       });
-    });
+      document.querySelectorAll("[data-tag-photo]").forEach(function (b) {
+        b.addEventListener("click", function (e) {
+          e.stopPropagation();
+          var id = b.getAttribute("data-tag-photo");
+          selectedImageForTag = (selectedImageForTag === id) ? null : id;
+          if (selectedImageForTag && isMagic()) showToast("Tap a category below to tag this image \u2014 tap it again to untag");
+          render();
+        });
+      });
+    }
     document.querySelectorAll("[data-view-photo]").forEach(function (slide) {
       slide.addEventListener("click", function (e) {
-        if (e.target.closest("[data-remove-photo]")) return;
+        if (e.target.closest("[data-remove-photo]") || e.target.closest("[data-tag-photo]")) return;
         var idx = parseInt(slide.getAttribute("data-view-photo"), 10);
-        openImageViewer((note.images || []).map(function (i) { return i.dataUrl; }), idx);
+        var imageUrls = resolvedImageSlides(note, forceRules).filter(function (s) { return s.kind === "image"; }).map(function (s) { return s.dataUrl; });
+        openImageViewer(imageUrls, idx);
       });
     });
     var carousel = document.getElementById("photo-carousel");
@@ -2309,7 +2416,7 @@
           forcedBadge +
           '<textarea id="note-title" class="title-input" placeholder="Title" rows="1">' + esc(note.title) + '</textarea>' +
           bodyField +
-          '<div class="editor-extra">' + renderAttachmentsHtml(note) + '</div>' +
+          '<div class="editor-extra">' + renderAttachmentsHtml(note, group, isForced ? forceEntry.rules : null) + '</div>' +
           afterField +
         '</div>' +
         bottomBar +
@@ -2769,8 +2876,7 @@
             cat.name = name;
             var matchedPool = state.pools.find(function (p) { return p.name.toLowerCase() === name.toLowerCase(); });
             if (matchedPool && cat.poolId !== matchedPool.id) {
-              var result = linkPoolToCategory(group, cat, matchedPool.id);
-              if (!result.ok) showToast("Only one pool per trick \u2014 unlink \u201C" + result.conflictName + "\u201D first");
+              linkPoolToCategory(group, cat, matchedPool.id);
             }
             saveState(); render();
           };
@@ -2866,17 +2972,8 @@
       bindReorderBar();
 
       var gvGroup = findGroup(currentGroupId);
-      var dialRule = groupPoolLinkedCategory(gvGroup);
-      if (dialRule && !groupDialLocked(currentGroupId)) {
-        var dialPool = findPool(dialRule.poolId);
-        if (dialPool) {
-          armPoolColumnDial(dialPool, currentGroupId, function (val) {
-            dialedPoolValue[currentGroupId] = val;
-            if (isMagic() && (!dialPool.columns || dialPool.columns.length < 2)) showToast("Loaded: " + val);
-          });
-        } else {
-          dialClearSession();
-        }
+      if (groupPoolLinkedCategories(gvGroup).length && !groupDialLocked(currentGroupId)) {
+        armGroupDial(gvGroup);
       } else {
         dialClearSession();
       }
@@ -2915,7 +3012,7 @@
       bindTitleField(document.getElementById("note-title"), "note-text");
       document.getElementById("note-title").addEventListener("input", function (e) { note.title = e.target.value; saveState(); });
       bindNoteMenuButtons();
-      bindAttachments(note);
+      bindAttachments(note, group3, isForcedView ? forceEntry2.rules : null);
       if (isForcedView) {
         var forcedImages = forcedContentImages(buildTokens(note), forceEntry2.rules);
         document.querySelectorAll("[data-forced-img-idx]").forEach(function (img) {
@@ -2982,6 +3079,16 @@
           chip.addEventListener("mousedown", function (e) { e.preventDefault(); });
           chip.addEventListener("click", function () {
             var catId = chip.getAttribute("data-tag-cat");
+            if (selectedImageForTag) {
+              var img2 = (note.images || []).find(function (i) { return i.id === selectedImageForTag; });
+              if (img2) {
+                img2.taggedCategoryId = (img2.taggedCategoryId === catId) ? null : catId;
+                saveState();
+              }
+              selectedImageForTag = null;
+              render();
+              return;
+            }
             var start = ta.selectionStart, end = ta.selectionEnd;
             if (start === end) {
               var hit = (note.tags || []).find(function (t) { return t.categoryId === catId && start >= t.start && start <= t.end; });
