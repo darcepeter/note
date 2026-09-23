@@ -166,6 +166,10 @@
   .note-row-item { display:flex; align-items:center; justify-content:space-between; gap:8px;
     padding:9px 0; border-bottom:1px solid var(--border); }
   .note-row-item .snippet { font-size:13.5px; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pool-value-input { font-size:13.5px; flex:1; min-width:0; background:transparent; border:none; border-bottom:1px solid transparent;
+    color:var(--text); font-family:inherit; padding:4px 0; }
+  .pool-value-input:focus { outline:none; border-bottom-color:var(--accent); }
+  .pool-value-image-thumb { width:36px; height:36px; object-fit:cover; border-radius:6px; flex-shrink:0; cursor:pointer; }
 
   .drag-handle { touch-action:none; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
     cursor:grab; color:var(--text-dim); font-size:16px; line-height:1; flex-shrink:0; padding:6px; }
@@ -226,6 +230,7 @@
     border-radius:999px; margin-bottom:10px; }
   .body-forced-image { font-size:17px; line-height:1.5; white-space:pre-wrap; word-break:break-word; }
   .body-forced-image img { max-width:100%; border-radius:12px; display:block; margin:10px 0; }
+  .forced-inline-image { cursor:zoom-in; }
 
   .list-items-wrap { flex:1; overflow-y:auto; margin-top:8px; }
   .list-item-row { display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--border); }
@@ -722,18 +727,30 @@
       return false;
     });
   }
-  function forcedContentHtml(tokens, rules) {
+  // imagesOut, if given, collects each forced image's dataUrl in display order so the
+  // caller can wire click-to-enlarge (data-forced-img-idx on the <img> indexes into it).
+  function forcedContentHtml(tokens, rules, imagesOut) {
     var usedFirst = {};
+    function renderVal(word) {
+      if (!isImageValue(word)) return esc(word);
+      var idx = imagesOut ? imagesOut.push(word.dataUrl) - 1 : 0;
+      return '<img src="' + word.dataUrl + '" class="forced-inline-image" data-forced-img-idx="' + idx + '">';
+    }
     return tokens.map(function (t) {
       if (t.type === "tag") {
         var rule = rules.find(function (r) { return r.categoryId === t.categoryId; });
         if (rule) {
-          if (rule.replaceAll) return isImageValue(rule.word) ? poolValueThumbHtml(rule.word, 240) : esc(rule.word);
-          if (!usedFirst[rule.categoryId]) { usedFirst[rule.categoryId] = true; return isImageValue(rule.word) ? poolValueThumbHtml(rule.word, 240) : esc(rule.word); }
+          if (rule.replaceAll) return renderVal(rule.word);
+          if (!usedFirst[rule.categoryId]) { usedFirst[rule.categoryId] = true; return renderVal(rule.word); }
         }
       }
       return esc(t.value);
     }).join("");
+  }
+  function forcedContentImages(tokens, rules) {
+    var images = [];
+    forcedContentHtml(tokens, rules, images);
+    return images;
   }
 
   // ---- diff-based tag preservation on edit ----
@@ -1464,6 +1481,7 @@
   function scrollKeyForRoute() {
     if (route === "home") return "home";
     if (route === "groupView") return "group:" + currentGroupId;
+    if (route === "poolEdit") return "pool:" + currentPoolId;
     return null;
   }
   function render() {
@@ -1539,7 +1557,8 @@
     if (isMulti) {
       var colsHtml = pool.columns.map(function (col, ci) {
         var rows = (col.values || []).map(function (v, vi) {
-          return '<div class="note-row-item" data-drag-id="colval:' + ci + ':' + vi + '"><span class="drag-handle">\u2630</span><span class="snippet">' + esc(v) + '</span>' +
+          return '<div class="note-row-item" data-drag-id="colval:' + ci + ':' + vi + '"><span class="drag-handle">\u2630</span>' +
+            '<input type="text" class="pool-value-input" data-edit-col-value="' + ci + ":" + vi + '" value="' + esc(v) + '">' +
             '<button class="btn btn-sm btn-danger" data-del-col-value="' + ci + ":" + vi + '">Delete</button></div>';
         }).join("") || '<div class="field-hint">No values yet.</div>';
         return '<div class="rule-card">' +
@@ -1556,7 +1575,7 @@
       }).join("");
       body =
         '<div class="section-label">Columns</div>' +
-        '<div class="field-hint">Each column dials separately \u2014 one fresh edge-hold per column \u2014 then joins into one value. E.g. Rank, then Suit, for a card. Drag a value\u2019s \u2630 handle to reorder it within its column.</div>' +
+        '<div class="field-hint">Each column dials separately \u2014 one fresh edge-hold per column \u2014 then joins into one value. E.g. Rank, then Suit, for a card. Drag a value\u2019s \u2630 handle to reorder it within its column, or tap it to edit.</div>' +
         colsHtml +
         '<div class="btn-row"><button class="btn btn-ghost btn-sm" id="add-column-btn">+ Add column</button></div>' +
         '<div class="section-label">Join with</div>' +
@@ -1565,14 +1584,14 @@
     } else {
       var rows = pool.values.map(function (v, idx) {
         var content = isImageValue(v)
-          ? '<img src="' + v.dataUrl + '" style="width:36px;height:36px;object-fit:cover;border-radius:6px;flex-shrink:0;">'
-          : '<span class="snippet">' + esc(v) + '</span>';
+          ? '<img src="' + v.dataUrl + '" class="pool-value-image-thumb" data-edit-image-value="' + idx + '" title="Tap to replace image">'
+          : '<input type="text" class="pool-value-input" data-edit-value="' + idx + '" value="' + esc(v) + '">';
         return '<div class="note-row-item" data-drag-id="val:' + idx + '"><span class="drag-handle">\u2630</span>' + content +
           '<button class="btn btn-sm btn-danger" data-del-value="' + idx + '">Delete</button></div>';
       }).join("") || '<div class="field-hint">No values yet.</div>';
       body =
         '<div class="section-label">Values</div>' +
-        '<div class="field-hint">Drag the \u2630 handle to reorder a value. Values can be text or images \u2014 useful for dialing through a set of pictures (like card faces) to view or reference.</div>' + rows +
+        '<div class="field-hint">Drag the \u2630 handle to reorder a value. Tap a value to edit it, or tap an image to replace it. Values can be text or images \u2014 useful for dialing through a set of pictures (like card faces) to view or reference.</div>' + rows +
         '<div class="row-flex" style="margin-top:8px;">' +
           '<input type="text" id="new-pool-value" placeholder="Add a value">' +
           '<button class="btn btn-ghost btn-sm" id="add-pool-value-btn">Add</button>' +
@@ -2126,6 +2145,7 @@
     if (!overlay) return;
     var stage = document.getElementById("image-viewer-stage");
     var img = document.getElementById("image-viewer-img");
+    var multi = imageViewerImages.length > 1;
     document.getElementById("image-viewer-close").addEventListener("click", closeImageViewer);
     overlay.addEventListener("click", function (e) { if (e.target === overlay) closeImageViewer(); });
     var prevBtn = document.getElementById("iv-prev"), nextBtn = document.getElementById("iv-next");
@@ -2138,24 +2158,50 @@
 
     // Zoom state lives only for this render cycle (reset whenever the viewer re-renders,
     // e.g. on switching images), applied via a CSS transform on the image itself.
+    var MAX_ZOOM = 5;
     var scale = 1, panX = 0, panY = 0, lastTapTime = 0, dragging = false, dragStartX = 0, dragStartY = 0,
         panStartX = 0, panStartY = 0, moved = false;
+    // Two-finger pinch tracks every active pointer by id so it can tell one-finger
+    // pan/swipe apart from a two-finger pinch, and hand back to panning smoothly
+    // when the person lifts one finger and keeps the other down.
+    var activePointers = {};
+    var pinching = false, pinchStartDist = 0, pinchStartScale = 1;
     function applyTransform() {
       img.style.transform = "translate(" + panX + "px," + panY + "px) scale(" + scale + ")";
       img.style.cursor = scale > 1 ? "grab" : "zoom-in";
     }
     function setZoom(z) {
-      scale = z;
+      scale = Math.max(1, Math.min(MAX_ZOOM, z));
       if (scale === 1) { panX = 0; panY = 0; }
       applyTransform();
     }
+    function pointerDist(ids) {
+      var p1 = activePointers[ids[0]], p2 = activePointers[ids[1]];
+      return Math.hypot(p1.x - p2.x, p1.y - p2.y);
+    }
     img.addEventListener("pointerdown", function (e) {
-      dragging = true; moved = false;
-      dragStartX = e.clientX; dragStartY = e.clientY;
-      panStartX = panX; panStartY = panY;
       try { img.setPointerCapture(e.pointerId); } catch (err) {}
+      activePointers[e.pointerId] = { x: e.clientX, y: e.clientY };
+      var ids = Object.keys(activePointers);
+      if (ids.length >= 2) {
+        pinching = true; dragging = false; moved = true;
+        pinchStartDist = pointerDist(ids.slice(0, 2)) || 1;
+        pinchStartScale = scale;
+      } else {
+        pinching = false; dragging = true; moved = false;
+        dragStartX = e.clientX; dragStartY = e.clientY;
+        panStartX = panX; panStartY = panY;
+      }
     });
     img.addEventListener("pointermove", function (e) {
+      if (!activePointers[e.pointerId]) return;
+      activePointers[e.pointerId] = { x: e.clientX, y: e.clientY };
+      var ids = Object.keys(activePointers);
+      if (pinching && ids.length >= 2) {
+        var dist = pointerDist(ids.slice(0, 2));
+        setZoom(pinchStartScale * (dist / pinchStartDist));
+        return;
+      }
       if (!dragging) return;
       var dx = e.clientX - dragStartX, dy = e.clientY - dragStartY;
       if (Math.abs(dx) > 4 || Math.abs(dy) > 4) moved = true;
@@ -2164,9 +2210,29 @@
         applyTransform();
       }
     });
+    function endPointer(e) {
+      delete activePointers[e.pointerId];
+      try { img.releasePointerCapture(e.pointerId); } catch (err) {}
+      var ids = Object.keys(activePointers);
+      if (pinching) {
+        if (ids.length >= 2) { pinchStartDist = pointerDist(ids.slice(0, 2)) || 1; pinchStartScale = scale; return; }
+        pinching = false;
+        if (scale <= 1.02) setZoom(1);
+        if (ids.length === 1) {
+          // One finger still down after a pinch — resume panning from here instead of dropping the gesture.
+          dragging = true; moved = true;
+          dragStartX = activePointers[ids[0]].x; dragStartY = activePointers[ids[0]].y;
+          panStartX = panX; panStartY = panY;
+        }
+        return true; // signal caller: this was a pinch release, not a tap/swipe
+      }
+      return false;
+    }
     img.addEventListener("pointerup", function (e) {
+      var wasPinch = endPointer(e);
       var wasDragging = dragging;
       dragging = false;
+      if (wasPinch) return;
       var now = Date.now();
       if (!moved && now - lastTapTime < 320) {
         // Double-tap: toggle zoom.
@@ -2181,6 +2247,7 @@
         if (Math.abs(dx) > 60) { goTo(imageViewerIndex + (dx < 0 ? 1 : -1)); return; }
       }
     });
+    img.addEventListener("pointercancel", endPointer);
     img.addEventListener("dblclick", function (e) { e.preventDefault(); });
     document.addEventListener("keydown", function onKey(e) {
       if (!document.getElementById("image-viewer-overlay")) { document.removeEventListener("keydown", onKey); return; }
@@ -2849,6 +2916,14 @@
       document.getElementById("note-title").addEventListener("input", function (e) { note.title = e.target.value; saveState(); });
       bindNoteMenuButtons();
       bindAttachments(note);
+      if (isForcedView) {
+        var forcedImages = forcedContentImages(buildTokens(note), forceEntry2.rules);
+        document.querySelectorAll("[data-forced-img-idx]").forEach(function (img) {
+          img.addEventListener("click", function () {
+            openImageViewer(forcedImages, parseInt(img.getAttribute("data-forced-img-idx"), 10));
+          });
+        });
+      }
       var afterTa = document.getElementById("note-text-after");
       if (afterTa) afterTa.addEventListener("input", function (e) { note.textAfter = e.target.value; saveState(); });
       if (window.visualViewport) {
@@ -3042,6 +3117,29 @@
             saveState(); render();
           });
         });
+        // Edit an existing text value in place. Commit as the person types (so a
+        // dial or force referencing this pool always sees the latest text), but only
+        // enforce the duplicate/conflict checks on blur so mid-edit states don't get
+        // rejected while they're still typing.
+        document.querySelectorAll("[data-edit-value]").forEach(function (inp) {
+          var idx = parseInt(inp.getAttribute("data-edit-value"), 10);
+          var prevValue = pool.values[idx];
+          inp.addEventListener("input", function () {
+            pool.values[idx] = inp.value;
+            saveState();
+          });
+          inp.addEventListener("blur", function () {
+            var val = inp.value.trim();
+            if (!val) { pool.values[idx] = prevValue; saveState(); render(); return; }
+            var dup = pool.values.some(function (v, i) { return i !== idx && !isImageValue(v) && v.toLowerCase() === val.toLowerCase(); });
+            if (dup) { showToast("Already in this pool"); pool.values[idx] = prevValue; saveState(); render(); return; }
+            var conflict = poolValueConflict(pool.id, val);
+            if (conflict) { showToast('"' + val + '" is already in "' + conflict.name + '"'); pool.values[idx] = prevValue; saveState(); render(); return; }
+            pool.values[idx] = val;
+            saveState();
+          });
+          inp.addEventListener("keydown", function (e) { if (e.key === "Enter") inp.blur(); });
+        });
         document.getElementById("add-pool-value-btn").addEventListener("click", function () {
           var input = document.getElementById("new-pool-value");
           var val = input.value.trim();
@@ -3057,28 +3155,45 @@
         });
         var poolImgBtn = document.getElementById("add-pool-image-btn");
         var poolImgInput = document.getElementById("pool-image-input");
+        var poolImgEditIdx = null; // null = adding a new value; otherwise the index of the value being replaced
+        function readAndStoreImage(file, onDataUrl) {
+          var reader = new FileReader();
+          reader.onload = function (ev) {
+            var img = new Image();
+            img.onload = function () {
+              var maxW = 800;
+              var scale = Math.min(1, maxW / img.width);
+              var w = Math.max(1, Math.round(img.width * scale)), h = Math.max(1, Math.round(img.height * scale));
+              var canvas = document.createElement("canvas");
+              canvas.width = w; canvas.height = h;
+              canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+              onDataUrl(canvas.toDataURL("image/jpeg", 0.85));
+            };
+            img.src = ev.target.result;
+          };
+          reader.readAsDataURL(file);
+        }
         if (poolImgBtn && poolImgInput) {
-          poolImgBtn.addEventListener("click", function () { poolImgInput.click(); });
+          poolImgBtn.addEventListener("click", function () { poolImgEditIdx = null; poolImgInput.click(); });
+          document.querySelectorAll("[data-edit-image-value]").forEach(function (thumb) {
+            thumb.addEventListener("click", function () {
+              poolImgEditIdx = parseInt(thumb.getAttribute("data-edit-image-value"), 10);
+              poolImgInput.click();
+            });
+          });
           poolImgInput.addEventListener("change", function (e) {
             var file = e.target.files && e.target.files[0];
             if (!file) return;
-            var reader = new FileReader();
-            reader.onload = function (ev) {
-              var img = new Image();
-              img.onload = function () {
-                var maxW = 800;
-                var scale = Math.min(1, maxW / img.width);
-                var w = Math.max(1, Math.round(img.width * scale)), h = Math.max(1, Math.round(img.height * scale));
-                var canvas = document.createElement("canvas");
-                canvas.width = w; canvas.height = h;
-                canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-                var dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+            readAndStoreImage(file, function (dataUrl) {
+              if (poolImgEditIdx != null && pool.values[poolImgEditIdx] != null) {
+                var existing = pool.values[poolImgEditIdx];
+                pool.values[poolImgEditIdx] = { type: "image", id: isImageValue(existing) ? existing.id : uid("img"), dataUrl: dataUrl };
+              } else {
                 pool.values.push({ type: "image", id: uid("img"), dataUrl: dataUrl });
-                saveState(); render();
-              };
-              img.src = ev.target.result;
-            };
-            reader.readAsDataURL(file);
+              }
+              poolImgInput.value = "";
+              saveState(); render();
+            });
           });
         }
       } else {
@@ -3128,6 +3243,26 @@
             pool.columns[ci].values.splice(vi, 1);
             saveState(); render();
           });
+        });
+        document.querySelectorAll("[data-edit-col-value]").forEach(function (inp) {
+          var parts = inp.getAttribute("data-edit-col-value").split(":");
+          var ci = parseInt(parts[0], 10), vi = parseInt(parts[1], 10);
+          var prevValue = pool.columns[ci].values[vi];
+          inp.addEventListener("input", function () {
+            pool.columns[ci].values[vi] = inp.value;
+            saveState();
+          });
+          inp.addEventListener("blur", function () {
+            var val = inp.value.trim();
+            if (!val) { pool.columns[ci].values[vi] = prevValue; saveState(); render(); return; }
+            var dup = pool.columns[ci].values.some(function (v, i) { return i !== vi && v.toLowerCase() === val.toLowerCase(); });
+            if (dup) { showToast("Already in this column"); pool.columns[ci].values[vi] = prevValue; saveState(); render(); return; }
+            var conflict = poolValueConflict(pool.id, val);
+            if (conflict) { showToast('"' + val + '" is already in "' + conflict.name + '"'); pool.columns[ci].values[vi] = prevValue; saveState(); render(); return; }
+            pool.columns[ci].values[vi] = val;
+            saveState();
+          });
+          inp.addEventListener("keydown", function (e) { if (e.key === "Enter") inp.blur(); });
         });
         document.getElementById("pool-separator").addEventListener("input", function (e) {
           pool.columnSeparator = e.target.value; saveState();

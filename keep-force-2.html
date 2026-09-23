@@ -31,29 +31,64 @@
   #app { height:100%; display:flex; flex-direction:column; position:relative; }
   .screen { position:absolute; inset:0; display:flex; flex-direction:column; background:var(--bg); }
 
-  header { padding:14px 14px 10px; display:flex; align-items:center; gap:10px; flex-shrink:0; }
-  header h1 { font-size:19px; font-weight:500; margin:0; user-select:none; flex-shrink:0; }
+  header { padding:14px 14px 10px; display:flex; align-items:center; gap:10px; flex-shrink:0; min-height:34px; }
+  header h1 { font-size:19px; font-weight:500; margin:0; user-select:none; flex-shrink:0; line-height:1; display:flex; align-items:center; }
   .mode-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-left:7px; vertical-align:middle; }
-  .back-btn { background:none; border:none; color:var(--text); font-size:20px; cursor:pointer; padding:4px 8px; margin-left:-6px; }
-  .header-menu-btn { background:none; border:none; color:var(--text); font-size:20px; cursor:pointer; padding:4px 10px; }
+  .back-btn { background:none; border:none; color:var(--text); font-size:20px; cursor:pointer; padding:4px 8px;
+    margin-left:-6px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .back-icon { display:block; }
+  .groupview-title-input { font-size:17px; font-weight:500; margin:0; flex:1; min-width:0; width:auto; border:none !important;
+    background:transparent !important; box-shadow:none !important; color:var(--text); padding:4px 0 !important;
+    font-family:inherit; text-overflow:ellipsis; }
+  .groupview-title-input:focus { outline:none; }
+  .header-menu-btn { background:none; border:none; color:var(--text); font-size:20px; cursor:pointer; padding:4px 10px;
+    display:flex; align-items:center; justify-content:center; }
   .spacer { flex:1; }
-  .photo-strip { display:flex; gap:8px; flex-wrap:wrap; margin:8px 0; }
-  .photo-thumb { position:relative; width:72px; height:72px; border-radius:8px; overflow:hidden; border:1px solid var(--border); }
-  .photo-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
-  .photo-remove { position:absolute; top:2px; right:2px; width:20px; height:20px; border-radius:50%; background:rgba(0,0,0,0.55); color:#fff; border:none; font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .photo-carousel-wrap { margin:12px 0; }
+  .photo-carousel { display:flex; overflow-x:auto; scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch;
+    border-radius:12px; gap:0; scrollbar-width:none; }
+  .photo-carousel::-webkit-scrollbar { display:none; }
+  .photo-slide { position:relative; flex:0 0 100%; scroll-snap-align:start; cursor:zoom-in; }
+  .photo-slide img { width:100%; max-height:340px; object-fit:cover; display:block; border-radius:12px; }
+  .photo-remove { position:absolute; top:8px; right:8px; width:28px; height:28px; border-radius:50%; background:rgba(0,0,0,0.55); color:#fff; border:none; font-size:16px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .photo-dots { display:flex; justify-content:center; gap:6px; margin-top:8px; }
+  .photo-dot { width:6px; height:6px; border-radius:50%; background:var(--border); }
+  .photo-dot.active { background:var(--accent); }
+  .image-viewer-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.94); z-index:9500;
+    display:flex; align-items:center; justify-content:center; touch-action:none; }
+  .image-viewer-stage { position:relative; width:100%; height:100%; overflow:hidden;
+    display:flex; align-items:center; justify-content:center; }
+  .image-viewer-stage img { max-width:92%; max-height:92%; object-fit:contain; touch-action:none;
+    transition:transform 0.15s ease-out; will-change:transform; -webkit-user-drag:none; }
+  .image-viewer-close { position:fixed; top:16px; right:16px; z-index:9600; background:rgba(255,255,255,0.15);
+    border:none; color:#fff; width:36px; height:36px; border-radius:50%; font-size:20px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; }
+  .image-viewer-nav { position:fixed; top:50%; transform:translateY(-50%); background:rgba(255,255,255,0.15);
+    border:none; color:#fff; width:40px; height:40px; border-radius:50%; font-size:22px; cursor:pointer; z-index:9600;
+    display:flex; align-items:center; justify-content:center; }
+  .image-viewer-prev { left:12px; }
+  .image-viewer-next { right:12px; }
+  .image-viewer-dots { position:fixed; bottom:20px; left:0; right:0; display:flex; justify-content:center; gap:6px; z-index:9600; }
+  .image-viewer-dot { width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,0.4); }
+  .image-viewer-dot.active { background:#fff; }
+  .card-photo-count { position:absolute; bottom:6px; right:6px; background:rgba(0,0,0,0.6); color:#fff;
+    font-size:11px; font-weight:600; padding:2px 7px; border-radius:999px; }
   .fab-secondary { position:absolute; bottom:20px; right:18px; width:52px; height:52px; border-radius:50%;
     background:var(--surface); border:1px solid var(--border); color:var(--text); font-size:22px;
     display:flex; align-items:center; justify-content:center; box-shadow:0 3px 10px rgba(0,0,0,0.28); cursor:pointer; z-index:20; }
   .header-search { flex:1; border:1px solid var(--border); background:var(--surface); border-radius:999px;
     padding:9px 14px; font-size:14px; color:var(--text); outline:none; font-family:inherit; }
   .header-search::placeholder { color:var(--text-dim); }
-  .icon-btn { background:none; border:none; color:var(--text); font-size:19px; cursor:pointer; padding:4px 6px; flex-shrink:0; }
+  .icon-btn { background:none; border:none; color:var(--text); font-size:19px; cursor:pointer; padding:4px 6px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; }
 
   .body-scroll { flex:1; overflow-y:auto; padding:4px 12px 90px; }
   .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; align-items:start; }
   .card { position:relative; border-radius:10px; padding:12px; min-width:0; overflow:hidden;
     border:1px solid var(--border); background:var(--surface); cursor:pointer; color:var(--text);
     user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
+  /* A trick/group note is a stack of notes, so it gets a second sheet peeking out behind it. */
+  .card.card-group { box-shadow: 3px 3px 0 0 var(--border); margin-right:2px; margin-bottom:2px; }
   .card-title { font-weight:700; font-size:15px; margin-bottom:4px; padding-right:22px; overflow-wrap:break-word; word-break:break-word; }
   .card-preview { font-size:13px; line-height:1.4; color:inherit; opacity:0.85; white-space:pre-wrap; overflow-wrap:break-word; word-break:break-word; }
   .card-meta { font-size:11.5px; color:inherit; opacity:0.65; margin-top:6px; }
@@ -65,6 +100,9 @@
   .title-dot { color:inherit; }
   .title-dot.locked { color:var(--text-dim); font-size:0.92em; }
   .card.card-reorder-mode { touch-action:none; cursor:grab; }
+  .reorder-drop-line { position:fixed; background:var(--accent); z-index:998; border-radius:2px; pointer-events:none; }
+  .reorder-drop-line-v { width:3px; }
+  .reorder-drop-line-h { height:3px; }
   .card.card-selected { box-shadow:0 0 0 2px var(--accent) inset; }
   .card.card-no-force { box-shadow:0 0 0 2px var(--danger) inset; }
   .card-select-check { position:absolute; top:6px; right:6px; width:22px; height:22px; border-radius:50%;
@@ -104,8 +142,10 @@
 
   .row-flex { display:flex; align-items:center; justify-content:space-between; gap:12px; }
   .swatches { display:flex; gap:8px; flex-wrap:wrap; margin-top:4px; }
-  .swatch { width:30px; height:30px; border-radius:50%; border:2px solid transparent; cursor:pointer; }
-  .swatch.selected { border-color:var(--text); }
+  .swatch { width:30px; height:30px; border-radius:50%; border:2px solid var(--border); cursor:pointer; position:relative; }
+  .swatch.selected { border-color:var(--text); border-width:3px; }
+  .swatch.selected::after { content:"\2713"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-size:14px; font-weight:700; color:#000; text-shadow:0 0 3px rgba(255,255,255,0.8); }
 
   .switch { position:relative; width:44px; height:26px; flex-shrink:0; }
   .switch input { opacity:0; width:0; height:0; }
@@ -126,6 +166,10 @@
   .note-row-item { display:flex; align-items:center; justify-content:space-between; gap:8px;
     padding:9px 0; border-bottom:1px solid var(--border); }
   .note-row-item .snippet { font-size:13.5px; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pool-value-input { font-size:13.5px; flex:1; min-width:0; background:transparent; border:none; border-bottom:1px solid transparent;
+    color:var(--text); font-family:inherit; padding:4px 0; }
+  .pool-value-input:focus { outline:none; border-bottom-color:var(--accent); }
+  .pool-value-image-thumb { width:36px; height:36px; object-fit:cover; border-radius:6px; flex-shrink:0; cursor:pointer; }
 
   .drag-handle { touch-action:none; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
     cursor:grab; color:var(--text-dim); font-size:16px; line-height:1; flex-shrink:0; padding:6px; }
@@ -145,7 +189,11 @@
 
   .chip-row { display:flex; gap:6px; flex-wrap:wrap; margin:10px 0; }
   .chip { border-radius:999px; padding:6px 12px; font-size:12.5px; border:1px solid var(--border);
-    cursor:pointer; background:var(--surface); color:var(--text); }
+    cursor:pointer; background:var(--surface); color:var(--text); flex-shrink:0; }
+  .editor-bottom-bar { position:fixed; left:0; right:0; bottom:0; z-index:60; background:var(--surface);
+    border-top:1px solid var(--border); }
+  .tag-chip-bar { display:flex; gap:6px; overflow-x:auto; -webkit-overflow-scrolling:touch; padding:0 12px 8px; }
+  .tag-chip-bar .chip { white-space:nowrap; }
 
   .tag-span { border-radius:4px; padding:0 3px; }
 
@@ -157,7 +205,8 @@
 
   .editor-wrap { flex:1; display:flex; flex-direction:column; padding:8px 20px 24px; overflow-y:auto; }
   .title-input { border:none !important; background:transparent !important; box-shadow:none !important;
-    font-size:24px; font-weight:700; padding:8px 0 !important; flex-shrink:0; }
+    font-size:26px; font-weight:700; padding:8px 0 !important; flex-shrink:0; resize:none; overflow:hidden;
+    font-family:inherit; white-space:pre-wrap; word-wrap:break-word; line-height:1.3; display:block; width:100%; min-height:0; }
   .title-input:focus { outline:none; }
   .body-textarea { border:none !important; background:transparent !important;
     font-size:16.5px; font-weight:400; line-height:1.65; flex:1; min-height:180px; padding:8px 0 !important; resize:none;
@@ -168,9 +217,20 @@
     white-space:pre-wrap; word-wrap:break-word; font-size:16.5px; font-weight:400; line-height:1.65;
     padding:8px 0; color:var(--text); font-family:inherit; }
   .body-textarea.with-overlay { position:absolute; inset:0; color:transparent !important; caret-color:var(--text); }
+  .fmt-btn { border:1px solid var(--border); background:var(--surface); color:var(--text); border-radius:6px;
+    width:32px; height:32px; font-size:14px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; }
+  .fmt-btn:active { background:var(--border); }
+  .draw-toolbar { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:4px 0 8px; flex-shrink:0; }
+  .draw-swatch-row { display:flex; gap:8px; flex-wrap:wrap; }
+  .draw-swatch { width:26px; height:26px; border-radius:50%; border:2px solid var(--border); cursor:pointer; position:relative; flex-shrink:0; }
+  .draw-swatch.selected { border-color:var(--text); border-width:3px; }
+  .draw-tool-active { background:var(--accent) !important; color:#202124; border-color:var(--accent) !important; }
   .editor-extra { flex-shrink:0; }
   .forced-badge { display:inline-block; font-size:11.5px; background:rgba(249,171,0,0.25); padding:3px 9px;
     border-radius:999px; margin-bottom:10px; }
+  .body-forced-image { font-size:17px; line-height:1.5; white-space:pre-wrap; word-break:break-word; }
+  .body-forced-image img { max-width:100%; border-radius:12px; display:block; margin:10px 0; }
+  .forced-inline-image { cursor:zoom-in; }
 
   .list-items-wrap { flex:1; overflow-y:auto; margin-top:8px; }
   .list-item-row { display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--border); }
@@ -206,6 +266,10 @@
 <script>
 (function () {
   var STORAGE_KEY = "keep_force_state_v8";
+  // A bold chevron (just the two lines that meet at a point) instead of a full arrow
+  // glyph with a shaft, used for every back button in the app.
+  var BACK_ARROW_SVG = '<svg class="back-icon" viewBox="0 0 10 16" width="10" height="16" fill="none" aria-hidden="true">' +
+    '<path d="M8 1.5L2 8L8 14.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   var TRICK_COLORS = ["#FFFFFF","#F28B82","#FBBC04","#FFF475","#CCFF90","#A7FFEB","#CBF0F8","#AECBFA","#D7AEFB"];
   var CATEGORY_PALETTE = ["#AECBFA","#CBF0F8","#D7AEFB","#CCFF90","#FDCFE8","#FFF475","#F28B82","#A7FFEB"];
 
@@ -223,7 +287,7 @@
     return copy;
   }
 
-  function defaultState() { return { mode: "note", groups: [], notes: [], homeOrder: [], pools: [], dialSettings: { inputMode: "auto", haptics: true, cycleSpeedMs: 650, hapticStrength: 15, invertDrag: false, holdMs: 320, enabled: true } }; }
+  function defaultState() { return { mode: "note", groups: [], notes: [], homeOrder: [], pools: [], dialSettings: { inputMode: "auto", haptics: true, cycleSpeedMs: 650, hapticStrength: 15, invertDrag: false, holdMs: 320, enabled: true, showOnScreen: true } }; }
 
   function migrateNote(n) {
     if (!n.type) n.type = "text";
@@ -231,6 +295,7 @@
     if (!Array.isArray(n.images)) n.images = [];
     if (n.type === "text") {
       if (typeof n.rawText !== "string") n.rawText = "";
+      if (typeof n.textAfter !== "string") n.textAfter = "";
       if (!Array.isArray(n.tags)) n.tags = [];
     } else if (n.type === "list") {
       if (!Array.isArray(n.items)) n.items = [];
@@ -240,6 +305,8 @@
       if (typeof n.listForce.word !== "string") n.listForce.word = "";
     } else if (n.type === "drawing") {
       if (typeof n.drawingData === "undefined") n.drawingData = null;
+      if (typeof n.drawTool !== "string") n.drawTool = "pen";
+      if (typeof n.drawColor !== "string") n.drawColor = "#202124";
     }
   }
 
@@ -288,6 +355,7 @@
       if (typeof dialSettings.invertDrag !== "boolean") dialSettings.invertDrag = false;
       if (typeof dialSettings.holdMs !== "number") dialSettings.holdMs = 320;
       if (typeof dialSettings.enabled !== "boolean") dialSettings.enabled = true;
+      if (typeof dialSettings.showOnScreen !== "boolean") dialSettings.showOnScreen = true;
       return { mode: (p.mode === "magic") ? "magic" : "note", groups: groups, notes: notes, homeOrder: homeOrder, pools: pools, dialSettings: dialSettings };
     } catch (e) { return defaultState(); }
   }
@@ -305,6 +373,7 @@
                               // dial goes inert (silently, no toast) for the rest of the visit and clears on re-entry
   function groupDialLocked(groupId) { return !!(groupId && dialLockedGroups[groupId]); }
   function dialTellLocked() { return !dialIsEnabled() || groupDialLocked(lastActiveGroupId); } // the title dot goes inert-grey whenever the dial itself won't respond — off, or locked after a force
+
   var lastSelStart = 0, lastSelEnd = 0;
   var fabMenuOpen = false, fabMenuGroupId = null;
   var poolFabMenuOpen = false;
@@ -317,6 +386,9 @@
   var multiSelectActive = false, multiSelectIds = {}, multiSelectContext = null; // context: null = Home standalone notes, or a groupId
   var reorderModeActive = false, reorderModeContext = null; // same context convention as multiSelectContext; whole-card drag, no tap/long-press
   var moveMenuBatchMode = false;
+  var imageViewerOpen = false, imageViewerImages = [], imageViewerIndex = 0; // full-screen zoom/carousel viewer, global overlay
+  function openImageViewer(images, idx) { imageViewerImages = images || []; imageViewerIndex = idx || 0; imageViewerOpen = true; render(); }
+  function closeImageViewer() { imageViewerOpen = false; imageViewerImages = []; render(); }
   var listForceDigits = {};       // noteId -> digits chosen so far this visit, e.g. [4] mid-entry
   var listForceTarget = {};       // noteId -> resolved target position (1-based), once fully dialed
   var listForceOverrideText = {}; // noteId -> live edit made to the forced row this visit (never touches real data)
@@ -421,6 +493,30 @@
   }
 
   function esc(s) { return String(s == null ? "" : s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  // The title field is a single-line-feeling textarea that grows to 2-3 lines instead of
+  // running off the edge of the screen when the title is long.
+  function autoGrowTitle(el) { if (!el) return; el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; }
+  // Keeps the formatting toolbar (and tag chips, when present) sitting just above the
+  // on-screen keyboard: the layout viewport doesn't shrink when a mobile keyboard opens,
+  // but visualViewport does, so we track that instead of relying on plain
+  // `position:fixed; bottom:0`. Also pads the editor so its content never sits behind the bar.
+  function positionEditorBottomBar() {
+    var bar = document.getElementById("editor-bottom-bar");
+    if (!bar) return;
+    var vv = window.visualViewport;
+    var inset = vv ? Math.max(0, window.innerHeight - (vv.height + vv.offsetTop)) : 0;
+    bar.style.bottom = inset + "px";
+    var wrap = document.getElementById("note-editor-wrap");
+    if (wrap) wrap.style.paddingBottom = (bar.offsetHeight + 16) + "px";
+  }
+  function bindTitleField(el, nextFocusId) {
+    if (!el) return;
+    autoGrowTitle(el);
+    el.addEventListener("input", function () { autoGrowTitle(el); });
+    el.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { e.preventDefault(); var next = nextFocusId && document.getElementById(nextFocusId); if (next) next.focus(); else el.blur(); }
+    });
+  }
   function isMagic() { return state.mode === "magic"; }
 
   function findGroup(id) { return state.groups.find(function (g) { return g.id === id; }); }
@@ -470,7 +566,7 @@
     var found = null;
     state.pools.forEach(function (p) {
       if (p.id === poolId) return;
-      if (poolAllValues(p).some(function (v) { return v.toLowerCase() === norm; })) found = p;
+      if (poolAllValues(p).some(function (v) { return !isImageValue(v) && v.toLowerCase() === norm; })) found = p;
     });
     return found;
   }
@@ -531,50 +627,53 @@
     var noteIds = {}; state.notes.forEach(function (n) { noteIds[n.id] = true; });
     state.homeOrder = state.homeOrder.filter(function (e) { return e.kind === "group" ? groupIds[e.id] : noteIds[e.id]; });
   }
-  function reorderHome(draggedKindId, targetKindId) {
+  // Moves arr[fromIdx] to sit just before (after=false) or just after (after=true)
+  // arr[toIdx], accounting for the index shift caused by removing the dragged item first.
+  function reorderArrayByIndex(arr, fromIdx, toIdx, after) {
+    if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return;
+    var item = arr.splice(fromIdx, 1)[0];
+    var insertAt = toIdx;
+    if (fromIdx < toIdx) insertAt -= 1;
+    if (after) insertAt += 1;
+    insertAt = Math.max(0, Math.min(arr.length, insertAt));
+    arr.splice(insertAt, 0, item);
+  }
+  function reorderHome(draggedKindId, targetKindId, after) {
     homeOrderEnsure();
     var fromIdx = state.homeOrder.findIndex(function (e) { return (e.kind + ":" + e.id) === draggedKindId; });
     var toIdx = state.homeOrder.findIndex(function (e) { return (e.kind + ":" + e.id) === targetKindId; });
-    if (fromIdx < 0 || toIdx < 0) return;
-    var item = state.homeOrder.splice(fromIdx, 1)[0];
-    state.homeOrder.splice(toIdx, 0, item);
+    reorderArrayByIndex(state.homeOrder, fromIdx, toIdx, after);
     saveState(); render();
   }
-  function reorderGroupNotes(groupId, draggedId, targetId) {
+  function reorderGroupNotes(groupId, draggedId, targetId, after) {
     var group = findGroup(groupId);
     var fromIdx = group.notes.findIndex(function (n) { return n.id === draggedId; });
     var toIdx = group.notes.findIndex(function (n) { return n.id === targetId; });
-    if (fromIdx < 0 || toIdx < 0) return;
-    var item = group.notes.splice(fromIdx, 1)[0];
-    group.notes.splice(toIdx, 0, item);
+    reorderArrayByIndex(group.notes, fromIdx, toIdx, after);
     saveState(); render();
   }
-  function reorderGroupCategories(groupId, draggedDragId, targetDragId) {
+  function reorderGroupCategories(groupId, draggedDragId, targetDragId, after) {
     var group = findGroup(groupId);
     var draggedId = draggedDragId.replace(/^cat:/, ""), targetId = targetDragId.replace(/^cat:/, "");
     var fromIdx = group.categories.findIndex(function (c) { return c.id === draggedId; });
     var toIdx = group.categories.findIndex(function (c) { return c.id === targetId; });
-    if (fromIdx < 0 || toIdx < 0) return;
-    var item = group.categories.splice(fromIdx, 1)[0];
-    group.categories.splice(toIdx, 0, item);
+    reorderArrayByIndex(group.categories, fromIdx, toIdx, after);
     saveState(); render();
   }
-  function reorderPoolValues(pool, draggedDragId, targetDragId) {
+  function reorderPoolValues(pool, draggedDragId, targetDragId, after) {
     var fromIdx = parseInt(draggedDragId.split(":")[1], 10);
     var toIdx = parseInt(targetDragId.split(":")[1], 10);
-    if (isNaN(fromIdx) || isNaN(toIdx) || fromIdx === toIdx) return;
-    var item = pool.values.splice(fromIdx, 1)[0];
-    pool.values.splice(toIdx, 0, item);
+    if (isNaN(fromIdx) || isNaN(toIdx)) return;
+    reorderArrayByIndex(pool.values, fromIdx, toIdx, after);
     saveState(); render();
   }
-  function reorderPoolColumnValues(pool, draggedDragId, targetDragId) {
+  function reorderPoolColumnValues(pool, draggedDragId, targetDragId, after) {
     var dParts = draggedDragId.split(":"), tParts = targetDragId.split(":");
     var dCi = parseInt(dParts[1], 10), dVi = parseInt(dParts[2], 10);
     var tCi = parseInt(tParts[1], 10), tVi = parseInt(tParts[2], 10);
-    if (dCi !== tCi || isNaN(dVi) || isNaN(tVi) || dVi === tVi) return;
+    if (dCi !== tCi || isNaN(dVi) || isNaN(tVi)) return;
     var col = pool.columns[dCi];
-    var item = col.values.splice(dVi, 1)[0];
-    col.values.splice(tVi, 0, item);
+    reorderArrayByIndex(col.values, dVi, tVi, after);
     saveState(); render();
   }
 
@@ -591,18 +690,67 @@
     return tokens;
   }
   function plainText(tokens) { return tokens.map(function (t) { return t.value; }).join(""); }
+  // A pool value can now be plain text (a string, as always) or an image: { type:"image", id, dataUrl }.
+  function isImageValue(v) { return !!(v && typeof v === "object" && v.type === "image"); }
+  function poolValueLabel(v) { return isImageValue(v) ? "an image" : String(v); }
+  function poolValueThumbHtml(v, maxPx) {
+    var size = maxPx || 160;
+    return isImageValue(v)
+      ? '<img src="' + v.dataUrl + '" style="max-width:' + size + 'px;max-height:' + size + 'px;border-radius:10px;display:block;margin:0 auto;object-fit:cover;">'
+      : esc(String(v));
+  }
   function forcedTextMulti(tokens, rules) {
     var usedFirst = {};
     return tokens.map(function (t) {
       if (t.type === "tag") {
         var rule = rules.find(function (r) { return r.categoryId === t.categoryId; });
         if (rule) {
-          if (rule.replaceAll) return rule.word;
-          if (!usedFirst[rule.categoryId]) { usedFirst[rule.categoryId] = true; return rule.word; }
+          // An image can't be inlined into plain text — forcedContentHasImage/forcedContentHtml
+          // handle that case with a real HTML view; this plain-text path just leaves it blank
+          // rather than showing "[object Object]" if it's ever called on its own.
+          var word = isImageValue(rule.word) ? "" : rule.word;
+          if (rule.replaceAll) return word;
+          if (!usedFirst[rule.categoryId]) { usedFirst[rule.categoryId] = true; return word; }
         }
       }
       return t.value;
     }).join("");
+  }
+  function forcedContentHasImage(tokens, rules) {
+    var usedFirst = {};
+    return tokens.some(function (t) {
+      if (t.type !== "tag") return false;
+      var rule = rules.find(function (r) { return r.categoryId === t.categoryId; });
+      if (!rule) return false;
+      if (rule.replaceAll) return isImageValue(rule.word);
+      if (!usedFirst[rule.categoryId]) { usedFirst[rule.categoryId] = true; return isImageValue(rule.word); }
+      return false;
+    });
+  }
+  // imagesOut, if given, collects each forced image's dataUrl in display order so the
+  // caller can wire click-to-enlarge (data-forced-img-idx on the <img> indexes into it).
+  function forcedContentHtml(tokens, rules, imagesOut) {
+    var usedFirst = {};
+    function renderVal(word) {
+      if (!isImageValue(word)) return esc(word);
+      var idx = imagesOut ? imagesOut.push(word.dataUrl) - 1 : 0;
+      return '<img src="' + word.dataUrl + '" class="forced-inline-image" data-forced-img-idx="' + idx + '">';
+    }
+    return tokens.map(function (t) {
+      if (t.type === "tag") {
+        var rule = rules.find(function (r) { return r.categoryId === t.categoryId; });
+        if (rule) {
+          if (rule.replaceAll) return renderVal(rule.word);
+          if (!usedFirst[rule.categoryId]) { usedFirst[rule.categoryId] = true; return renderVal(rule.word); }
+        }
+      }
+      return esc(t.value);
+    }).join("");
+  }
+  function forcedContentImages(tokens, rules) {
+    var images = [];
+    forcedContentHtml(tokens, rules, images);
+    return images;
   }
 
   // ---- diff-based tag preservation on edit ----
@@ -646,6 +794,7 @@
     }
     function isWordChar(ch) { return !!ch && /[a-z0-9]/i.test(ch); }
     poolValues.forEach(function (val) {
+      if (isImageValue(val)) return; // nothing to auto-detect in note text for an image value
       var alreadyTaggedHere = note.tags.some(function (t) {
         return t.categoryId === cat.id && text.slice(t.start, t.end).toLowerCase() === val.toLowerCase();
       });
@@ -674,6 +823,7 @@
     var lowerText = text.toLowerCase();
     state.pools.forEach(function (pool) {
       poolCombinedValues(pool).forEach(function (val) {
+        if (isImageValue(val)) return; // nothing to auto-detect in note text for an image value
         var alreadyTaggedHere = note.tags.some(function (t) {
           return t.poolId === pool.id && text.slice(t.start, t.end).toLowerCase() === val.toLowerCase();
         });
@@ -709,7 +859,7 @@
     var n = group.notes[0];
     if (n.type === "text") return plainText(buildTokens(n));
     if (n.type === "list") return (n.items || []).map(function (it) { return it.text; }).filter(Boolean).join(", ");
-    if (n.type === "drawing") return n.drawingData ? "\u270F\uFE0F Drawing" : "";
+    if (n.type === "drawing") return n.drawingData ? "Drawing" : "";
     return "";
   }
   // A text note "counts" for forcing if it has a tag belonging to a category
@@ -728,7 +878,10 @@
   function noteCardHtml(note, previewRows, dataAttrs, selected, needsForceRing, reorderMode) {
     var titleHtml = note.title ? '<div class="card-title">' + esc(note.title) + '</div>' : "";
     var photoHtml = (note.images && note.images.length)
-      ? '<img src="' + note.images[0].dataUrl + '" style="width:100%;max-height:100px;object-fit:cover;border-radius:6px;display:block;margin-bottom:6px;">'
+      ? '<div style="position:relative;margin-bottom:6px;">' +
+          '<img src="' + note.images[0].dataUrl + '" style="width:100%;max-height:160px;object-fit:cover;border-radius:8px;display:block;">' +
+          (note.images.length > 1 ? '<div class="card-photo-count">' + note.images.length + '</div>' : "") +
+        '</div>'
       : "";
     var bodyHtml;
     if (note.type === "list") {
@@ -740,7 +893,7 @@
     } else if (note.type === "drawing") {
       bodyHtml = note.drawingData
         ? '<img src="' + note.drawingData + '" style="max-width:100%;border-radius:6px;display:block;">'
-        : '<div class="card-preview">\u270F\uFE0F Drawing</div>';
+        : '<div class="card-preview">Drawing</div>';
     } else {
       var bodyText = plainText(buildTokens(note));
       bodyHtml = bodyText
@@ -841,6 +994,7 @@
     return el;
   }
   function dialShow(html) {
+    if (state.dialSettings.showOnScreen === false) return; // "no on-screen indicators" mode — haptic only
     dialEnsureOverlay().classList.add("show");
     document.getElementById("dial-value").innerHTML = html;
   }
@@ -851,6 +1005,7 @@
   function dialRenderIndex(index) {
     var val = dialActive.options[index];
     if (dialArmedSession && dialArmedSession.formatDisplay) return dialArmedSession.formatDisplay(val, index);
+    if (isImageValue(val)) return poolValueThumbHtml(val, 220);
     return esc(String(val));
   }
   function dialBeginActive(startY) {
@@ -921,7 +1076,10 @@
     e.preventDefault();
     try { e.target.setPointerCapture(e.pointerId); } catch (err) {}
     var pe = { x: e.clientX, y: e.clientY, lastY: e.clientY };
-    pe.timer = setTimeout(function () { dialPendingEdge = null; dialBeginActive(pe.lastY); }, state.dialSettings.holdMs);
+    pe.timer = setTimeout(function () {
+      dialPendingEdge = null;
+      dialBeginActive(pe.lastY);
+    }, state.dialSettings.holdMs);
     dialPendingEdge = pe;
   }
   function dialEdgeMove(e) {
@@ -956,6 +1114,7 @@
   function toggleMultiSelect(id) {
     if (multiSelectIds[id]) delete multiSelectIds[id];
     else multiSelectIds[id] = true;
+    if (!Object.keys(multiSelectIds).length) { exitMultiSelect(); render(); return; } // last pick removed — close the bar instead of leaving it empty
     render();
   }
   // All forward screen changes go through here: it remembers where you came from
@@ -996,6 +1155,7 @@
   function openSettings() { navigate(function () { route = "settings"; }); }
   function openSettingsMenu() { navigate(function () { route = "settingsMenu"; }); }
   function openExportImport() { navigate(function () { route = "exportImport"; }); }
+  function openDocs() { navigate(function () { route = "docs"; }); }
   function openExportScreen(groupId) { navigate(function () { exportScreenGroupId = groupId || null; route = "exportScreen"; }); }
   function openPoolEdit(id) { navigate(function () { currentPoolId = id; route = "poolEdit"; }); }
   function addPool() {
@@ -1114,8 +1274,8 @@
   function addGroup() {
     var g = { id: uid("grp"), title: "Untitled", color: "#FFFFFF", previewRows: 3, notes: [],
       categories: [], force: { armed: false } };
-    state.groups.push(g); saveState();
-    openGroupSetup(g.id);
+    state.groups.push(g); homeOrderEnsure(); saveState();
+    render(); // just create it and show it on Home — no auto-navigate into its setup
   }
   function deleteGroup(id) { state.groups = state.groups.filter(function (g) { return g.id !== id; }); saveState(); goHomeReset(); }
 
@@ -1310,9 +1470,27 @@
   }
 
   // ---------------- render ----------------
+  // Every render() rebuilds the whole screen's DOM from scratch, including the scrollable
+  // note-list container, which otherwise means it silently resets to the top on ANY re-render
+  // — reopening the same list after viewing a note, or just toggling a multi-select pick while
+  // scrolled down. We save the outgoing screen's scroll position (keyed by which list it is)
+  // right before its DOM gets replaced, and restore it after rendering whichever screen comes
+  // back with that same key.
+  var savedScrollPositions = {}; // scroll key -> scrollTop
+  var activeScrollKey = null;    // the scroll key of whatever's currently sitting in #app
+  function scrollKeyForRoute() {
+    if (route === "home") return "home";
+    if (route === "groupView") return "group:" + currentGroupId;
+    if (route === "poolEdit") return "pool:" + currentPoolId;
+    return null;
+  }
   function render() {
     if (route !== "settings" && route !== "groupView" && route !== "listEditor" && route !== "noteEditor") dialClearSession();
     var app = document.getElementById("app");
+    if (activeScrollKey) {
+      var outgoingScrollEl = app.querySelector(".body-scroll");
+      if (outgoingScrollEl) savedScrollPositions[activeScrollKey] = outgoingScrollEl.scrollTop;
+    }
     if (route === "home") app.innerHTML = renderHome();
     else if (route === "groupSetup") app.innerHTML = renderGroupSetup();
     else if (route === "groupView") app.innerHTML = renderGroupView();
@@ -1320,13 +1498,21 @@
     else if (route === "listEditor") app.innerHTML = renderListEditor();
     else if (route === "drawingEditor") app.innerHTML = renderDrawingEditor();
     else if (route === "settingsMenu") app.innerHTML = renderSettingsMenu();
+    else if (route === "docs") app.innerHTML = renderDocs();
     else if (route === "poolsList") app.innerHTML = renderPoolsList();
     else if (route === "poolEdit") app.innerHTML = renderPoolEdit();
     else if (route === "settings") app.innerHTML = renderSettings();
     else if (route === "exportImport") app.innerHTML = renderExportImport();
     else if (route === "exportScreen") app.innerHTML = renderExportScreen();
     else if (route === "listForceSetup") app.innerHTML = renderListForceSetup();
+    if (imageViewerOpen) app.insertAdjacentHTML("beforeend", renderImageViewerOverlay());
     bind();
+    if (imageViewerOpen) bindImageViewer();
+    activeScrollKey = scrollKeyForRoute();
+    if (activeScrollKey && savedScrollPositions[activeScrollKey] != null) {
+      var incomingScrollEl = app.querySelector(".body-scroll");
+      if (incomingScrollEl) incomingScrollEl.scrollTop = savedScrollPositions[activeScrollKey];
+    }
   }
 
   function renderPoolsList() {
@@ -1345,7 +1531,7 @@
     if (!cards) cards = '<div class="empty">No pools yet.<br>Tap + to make one \u2014 e.g. star signs, or a deck of cards.</div>';
     return (
       '<div class="screen">' +
-        '<header><button class="back-btn" id="pools-back">\u2190</button><h1 style="font-size:17px;">Pools</h1></header>' +
+        '<header><button class="back-btn" id="pools-back">' + BACK_ARROW_SVG + '</button><h1 style="font-size:17px;">Pools</h1></header>' +
         '<div class="field-hint" style="padding:0 12px;">A pool is a list of values one category can rotate through, instead of always forcing the same word. Link one to a category in a trick\u2019s setup.</div>' +
         '<div class="body-scroll"><div class="grid">' + cards + '</div></div>' +
         '<button class="fab" id="add-pool-btn">+</button>' +
@@ -1371,7 +1557,8 @@
     if (isMulti) {
       var colsHtml = pool.columns.map(function (col, ci) {
         var rows = (col.values || []).map(function (v, vi) {
-          return '<div class="note-row-item" data-drag-id="colval:' + ci + ':' + vi + '"><span class="drag-handle">\u2630</span><span class="snippet">' + esc(v) + '</span>' +
+          return '<div class="note-row-item" data-drag-id="colval:' + ci + ':' + vi + '"><span class="drag-handle">\u2630</span>' +
+            '<input type="text" class="pool-value-input" data-edit-col-value="' + ci + ":" + vi + '" value="' + esc(v) + '">' +
             '<button class="btn btn-sm btn-danger" data-del-col-value="' + ci + ":" + vi + '">Delete</button></div>';
         }).join("") || '<div class="field-hint">No values yet.</div>';
         return '<div class="rule-card">' +
@@ -1388,7 +1575,7 @@
       }).join("");
       body =
         '<div class="section-label">Columns</div>' +
-        '<div class="field-hint">Each column dials separately \u2014 one fresh edge-hold per column \u2014 then joins into one value. E.g. Rank, then Suit, for a card. Drag a value\u2019s \u2630 handle to reorder it within its column.</div>' +
+        '<div class="field-hint">Each column dials separately \u2014 one fresh edge-hold per column \u2014 then joins into one value. E.g. Rank, then Suit, for a card. Drag a value\u2019s \u2630 handle to reorder it within its column, or tap it to edit.</div>' +
         colsHtml +
         '<div class="btn-row"><button class="btn btn-ghost btn-sm" id="add-column-btn">+ Add column</button></div>' +
         '<div class="section-label">Join with</div>' +
@@ -1396,20 +1583,27 @@
         '<div class="field-hint">Columns are joined with this text in between \u2014 e.g. \u201cQueen\u201d + this + \u201cHearts\u201d.</div>';
     } else {
       var rows = pool.values.map(function (v, idx) {
-        return '<div class="note-row-item" data-drag-id="val:' + idx + '"><span class="drag-handle">\u2630</span><span class="snippet">' + esc(v) + '</span>' +
+        var content = isImageValue(v)
+          ? '<img src="' + v.dataUrl + '" class="pool-value-image-thumb" data-edit-image-value="' + idx + '" title="Tap to replace image">'
+          : '<input type="text" class="pool-value-input" data-edit-value="' + idx + '" value="' + esc(v) + '">';
+        return '<div class="note-row-item" data-drag-id="val:' + idx + '"><span class="drag-handle">\u2630</span>' + content +
           '<button class="btn btn-sm btn-danger" data-del-value="' + idx + '">Delete</button></div>';
       }).join("") || '<div class="field-hint">No values yet.</div>';
       body =
         '<div class="section-label">Values</div>' +
-        '<div class="field-hint">Drag the \u2630 handle to reorder a value.</div>' + rows +
+        '<div class="field-hint">Drag the \u2630 handle to reorder a value. Tap a value to edit it, or tap an image to replace it. Values can be text or images \u2014 useful for dialing through a set of pictures (like card faces) to view or reference.</div>' + rows +
         '<div class="row-flex" style="margin-top:8px;">' +
           '<input type="text" id="new-pool-value" placeholder="Add a value">' +
           '<button class="btn btn-ghost btn-sm" id="add-pool-value-btn">Add</button>' +
+        '</div>' +
+        '<div class="btn-row" style="margin-top:8px;">' +
+          '<button class="btn btn-ghost btn-sm" id="add-pool-image-btn">+ Add image value</button>' +
+          '<input type="file" accept="image/*" id="pool-image-input" style="display:none;">' +
         '</div>';
     }
     return (
       '<div class="screen">' +
-        '<header><button class="back-btn" id="pool-edit-back">\u2190</button><h1 style="font-size:17px;">Edit pool</h1></header>' +
+        '<header><button class="back-btn" id="pool-edit-back">' + BACK_ARROW_SVG + '</button><h1 style="font-size:17px;">Edit pool</h1></header>' +
         '<div class="body-scroll">' +
           '<div class="section-label">Name</div>' +
           '<input type="text" id="pool-name" value="' + esc(pool.name) + '">' +
@@ -1430,12 +1624,56 @@
   function renderSettingsMenu() {
     return (
       '<div class="screen">' +
-        '<header><button class="back-btn" id="settings-menu-back">\u2190</button><h1 style="font-size:17px;">Settings</h1></header>' +
+        '<header><button class="back-btn" id="settings-menu-back">' + BACK_ARROW_SVG + '</button><h1 style="font-size:17px;">Settings</h1></header>' +
         '<div class="body-scroll">' +
           '<div class="settings-menu-row" data-settings-nav="pools"><span class="snippet">Pools</span><span style="color:var(--text-dim);">\u203A</span></div>' +
           '<div class="settings-menu-row" data-settings-nav="dial"><span class="snippet">Dial</span><span style="color:var(--text-dim);">\u203A</span></div>' +
           '<div class="settings-menu-row" data-settings-nav="exportimport"><span class="snippet">Export &amp; import tricks</span><span style="color:var(--text-dim);">\u203A</span></div>' +
+          '<div class="settings-menu-row" data-settings-nav="docs"><span class="snippet">How it works</span><span style="color:var(--text-dim);">\u203A</span></div>' +
         '</div>' +
+      '</div>'
+    );
+  }
+  function docSection(title, bodyHtml) {
+    return '<div class="section-label" style="margin-top:20px;">' + esc(title) + '</div>' + bodyHtml;
+  }
+  function docP(html) { return '<div class="field-hint" style="font-size:13.5px; line-height:1.55; margin:6px 0 10px;">' + html + '</div>'; }
+  function renderDocs() {
+    var body =
+      docSection("Modes", docP(
+        "The app has two modes. <b>Note mode</b> is what you show to anyone else \u2014 it looks and behaves like a plain notes app, with no trick controls visible. " +
+        "<b>Magic mode</b> reveals the setup tools: categories, pools, the dial, and forcing rules. Switch modes from Settings, or by tapping the \u201Cnotary.\u201D logo on Home if the dial shortcut is enabled."
+      )) +
+      docSection("Groups", docP(
+        "A group is one trick or routine \u2014 a folder of notes plus the categories and force rules that tie them together. Open a group and arm its force (in Magic mode) so that opening notes in front of an audience (in Note mode) can trigger forced content."
+      )) +
+      docSection("Categories & forcing", docP(
+        "A category marks a word or phrase inside a note's text (e.g. \u201CCARD\u201D) as something that gets swapped out. Link a category to a fixed word, or to a <b>pool</b> for a value that changes each performance. " +
+        "Give a category a <b>trigger count</b> \u2014 the Nth note opened in a session \u2014 to control exactly when its force fires."
+      )) +
+      docSection("Pools", docP(
+        "A pool is a reusable list of values (words, or images) that a category can pull from. A single-column pool holds one value per row \u2014 text, an image, or a mix of both. " +
+        "A multi-column pool (e.g. rank + suit) combines several columns into one value and is text-only. Pools are shared across groups, so build one deck or list once and reuse it anywhere."
+      )) +
+      docSection("The dial", docP(
+        "The dial lets you privately load a pool value before a note is opened, so the forced content matches something you (or a confederate) already know \u2014 a peeked card, a freely-chosen number, and so on. " +
+        "Turn it on in Magic settings, then hold an edge of the screen in a group to bring up the dial overlay. Choose <b>auto-cycle</b> to have values advance on their own, or <b>drag to scrub</b> to move through them by touch. " +
+        "Once armed, the loaded value is ready to appear the next time a linked note is opened."
+      )) +
+      docSection("Images in notes", docP(
+        "Add a photo to any note and it appears inline, with room for text before and after it. Tap a photo to open it full-screen, where you can double-tap or pinch to zoom and pan. Add several photos to a note and they become a swipeable carousel with position dots."
+      )) +
+      docSection("Images as forces", docP(
+        "A single-column pool can hold images instead of (or alongside) text. Link a category to that pool and its forced value can be a picture \u2014 handy for dialing through a set of card faces or other visual references. " +
+        "Multi-column pools stay text-only, since combining an image with text doesn't make sense there."
+      )) +
+      docSection("Export & import", docP(
+        "From Magic settings, export one or more tricks (with their pools) as a file or as text you can paste elsewhere, and import them back the same way. Matching pool names are reused on import so you don't end up with duplicates."
+      ));
+    return (
+      '<div class="screen">' +
+        '<header><button class="back-btn" id="docs-back">' + BACK_ARROW_SVG + '</button><h1 style="font-size:17px;">How it works</h1></header>' +
+        '<div class="body-scroll">' + body + '</div>' +
       '</div>'
     );
   }
@@ -1458,7 +1696,7 @@
     }).join("") || '<div class="field-hint">No tricks yet.</div>';
     return (
       '<div class="screen">' +
-        '<header><button class="back-btn" id="exportimport-back">\u2190</button><h1 style="font-size:17px;">Export &amp; import</h1></header>' +
+        '<header><button class="back-btn" id="exportimport-back">' + BACK_ARROW_SVG + '</button><h1 style="font-size:17px;">Export &amp; import</h1></header>' +
         '<div class="body-scroll">' +
           '<div class="section-label">Export</div>' +
           '<div class="field-hint">Pick which tricks to export \u2014 leave all unchecked to export everything. Any pools they use come along with them.</div>' +
@@ -1484,7 +1722,7 @@
     var text = exportPayloadToText(buildExportPayload(group ? [group.id] : null));
     return (
       '<div class="screen">' +
-        '<header><button class="back-btn" id="export-screen-back">\u2190</button><h1 style="font-size:17px;">Export ' + (group ? esc(group.title || "trick") : "all tricks") + '</h1></header>' +
+        '<header><button class="back-btn" id="export-screen-back">' + BACK_ARROW_SVG + '</button><h1 style="font-size:17px;">Export ' + (group ? esc(group.title || "trick") : "all tricks") + '</h1></header>' +
         '<div class="body-scroll">' +
           (downloadsNS
             ? '<div class="field-hint">Save this as a file, or copy the text below to paste into Export &amp; import \u2192 Import elsewhere.</div>' +
@@ -1503,11 +1741,11 @@
     }).join("");
     return (
       '<div class="screen">' +
-        '<header><button class="back-btn" id="settings-back">\u2190</button><h1 style="font-size:17px;">Dial</h1></header>' +
+        '<header><button class="back-btn" id="settings-back">' + BACK_ARROW_SVG + '</button><h1 style="font-size:17px;">Dial</h1></header>' +
         '<div class="body-scroll">' +
           '<div class="row-flex">' +
             '<div><div style="font-size:14px; font-weight:600;">Dial enabled</div>' +
-              '<div class="field-hint">Long-press either \u201C+\u201D button anywhere in the app to toggle this too.</div></div>' +
+              '<div class="field-hint">Tap the \u201Cnotary.\u201D logo on Home to toggle this too.</div></div>' +
             '<label class="switch"><input type="checkbox" id="dial-enabled" ' + (dialIsEnabled() ? "checked" : "") + '><span class="slider"></span></label>' +
           '</div>' +
           '<div class="section-label">Dial input</div>' +
@@ -1515,20 +1753,27 @@
             '<label style="display:flex;align-items:center;gap:6px;font-size:14px;"><input type="radio" name="dialmode" value="auto" ' + (state.dialSettings.inputMode === "auto" ? "checked" : "") + ' style="width:auto;"> Auto-cycle</label>' +
             '<label style="display:flex;align-items:center;gap:6px;font-size:14px;"><input type="radio" name="dialmode" value="drag" ' + (state.dialSettings.inputMode === "drag" ? "checked" : "") + ' style="width:auto;"> Drag to scrub</label>' +
           '</div>' +
-          '<div class="field-hint">Hold either edge of the screen to activate, wherever the dial is available. Move anywhere once it\u2019s active. Release to commit whatever\u2019s showing.</div>' +
+          '<div class="field-hint">' + (state.dialSettings.inputMode === "auto"
+            ? "Hold either edge to start it auto-cycling through values. Release to commit whatever\u2019s showing."
+            : "Hold either edge, then drag up or down to scrub through values. Release to commit whatever\u2019s showing.") + '</div>' +
           '<div class="row-flex" style="margin-top:14px;">' +
             '<div><div style="font-size:14px; font-weight:600;">Invert drag direction</div>' +
-              '<div class="field-hint">On: dragging down increases the value instead of decreasing it. Only affects drag mode.</div></div>' +
+              '<div class="field-hint">Drag mode only. On: dragging down increases the value.</div></div>' +
             '<label class="switch"><input type="checkbox" id="dial-invert" ' + (state.dialSettings.invertDrag ? "checked" : "") + '><span class="slider"></span></label>' +
+          '</div>' +
+          '<div class="row-flex" style="margin-top:14px;">' +
+            '<div><div style="font-size:14px; font-weight:600;">Show on screen</div>' +
+              '<div class="field-hint">Off: haptic only, nothing shown while dialing.</div></div>' +
+            '<label class="switch"><input type="checkbox" id="dial-show-onscreen" ' + (state.dialSettings.showOnScreen !== false ? "checked" : "") + '><span class="slider"></span></label>' +
           '</div>' +
 
           '<div class="section-label">Hold to activate</div>' +
           '<input type="range" id="dial-hold" min="100" max="2000" step="50" value="' + state.dialSettings.holdMs + '">' +
-          '<div class="field-hint" id="dial-hold-label">' + state.dialSettings.holdMs + 'ms \u2014 how long you have to hold the edge before the dial opens.</div>' +
+          '<div class="field-hint" id="dial-hold-label">' + state.dialSettings.holdMs + 'ms to hold an edge before the dial opens.</div>' +
 
           '<div class="section-label">Cycle speed</div>' +
           '<input type="range" id="dial-speed" min="250" max="1000" step="50" value="' + state.dialSettings.cycleSpeedMs + '">' +
-          '<div class="field-hint" id="dial-speed-label">' + state.dialSettings.cycleSpeedMs + 'ms per step in auto-cycle. Higher is slower.</div>' +
+          '<div class="field-hint" id="dial-speed-label">' + state.dialSettings.cycleSpeedMs + 'ms per step. Auto-cycle only.</div>' +
 
           '<div class="row-flex" style="margin-top:16px;">' +
             '<div style="font-size:14px; font-weight:600;">Haptic feedback</div>' +
@@ -1543,7 +1788,7 @@
           '<select id="dial-demo-pool">' + poolOptions + '</select>' +
           '<div style="margin-top:14px; border:1px dashed var(--border); border-radius:10px; padding:24px; text-align:center;">' +
             '<div style="font-size:13px; color:var(--text-dim);">Last committed value</div>' +
-            '<div style="font-size:22px; font-weight:700; margin-top:6px;">' + esc(dialDemoValue || "\u2014") + '</div>' +
+            '<div style="font-size:22px; font-weight:700; margin-top:6px;">' + (dialDemoValue ? poolValueThumbHtml(dialDemoValue, 160) : "\u2014") + '</div>' +
           '</div>' +
         '</div>' +
       '</div>'
@@ -1651,7 +1896,7 @@
         var gSelClass = gSelected ? " card-selected" : "";
         var gReorderClass = gHomeReorder ? " card-reorder-mode" : "";
         var gCheckHtml = gSelected ? '<div class="card-select-check">\u2713</div>' : "";
-        return '<div class="card' + gSelClass + gReorderClass + '" style="' + style + '" data-drag-id="group:' + g.id + '">' +
+        return '<div class="card card-group' + gSelClass + gReorderClass + '" style="' + style + '" data-drag-id="group:' + g.id + '">' +
           gCheckHtml +
           '<div class="card-title">' + esc(g.title) + '</div>' +
           gPreviewHtml +
@@ -1685,7 +1930,7 @@
   function renderGroupSetup() {
     var group = findGroup(currentGroupId);
     var swatches = TRICK_COLORS.map(function (c) {
-      return '<div class="swatch ' + (group.color === c ? "selected" : "") + '" style="background:' + c + ';border:1px solid var(--border);" data-color="' + c + '"></div>';
+      return '<div class="swatch ' + (group.color === c ? "selected" : "") + '" style="background:' + c + ';" data-color="' + c + '"></div>';
     }).join("");
 
     var forceSection = "";
@@ -1741,7 +1986,7 @@
 
     return (
       '<div class="screen">' +
-        '<header><button class="back-btn" id="setup-back">\u2190</button><h1 style="font-size:17px;">' + (isMagic() ? "Trick setup" : "Group setup") + '</h1></header>' +
+        '<header><button class="back-btn" id="setup-back">' + BACK_ARROW_SVG + '</button><h1 style="font-size:17px;">' + (isMagic() ? "Trick setup" : "Group setup") + '</h1></header>' +
         '<div class="body-scroll">' +
           '<div class="section-label">Title</div>' +
           '<input type="text" id="group-title" value="' + esc(group.title) + '">' +
@@ -1753,8 +1998,10 @@
 
           forceSection +
 
-          '<div class="section-label">Export</div>' +
-          '<div class="btn-row"><button class="btn btn-ghost" id="export-trick-btn">Export this ' + (isMagic() ? "trick" : "group note") + '</button></div>' +
+          (isMagic()
+            ? '<div class="section-label">Export</div>' +
+              '<div class="btn-row"><button class="btn btn-ghost" id="export-trick-btn">Export this trick</button></div>'
+            : "") +
           '<div class="section-label">Danger zone</div>' +
           '<button class="btn btn-danger" id="delete-group-btn">Delete this group note</button>' +
         '</div>' +
@@ -1774,11 +2021,12 @@
     if (isMagic() && dialRule) {
       var loaded = dialedPoolValue[currentGroupId];
       dialStatus = '<div class="field-hint" style="padding:0 12px;">Dial armed' +
-        (loaded ? " \u2014 loaded: " + esc(loaded) : " \u2014 nothing loaded yet, hold an edge") + '</div>';
+        (loaded ? " \u2014 loaded: " + esc(poolValueLabel(loaded)) : " \u2014 nothing loaded yet, hold an edge") + '</div>';
     }
     return (
       '<div class="screen">' +
-        '<header><button class="back-btn" id="groupview-back">\u2190</button><h1 style="font-size:17px;flex:1;">' + esc(group.title) + '</h1>' +
+        '<header><button class="back-btn" id="groupview-back">' + BACK_ARROW_SVG + '</button>' +
+          '<input type="text" id="groupview-title" class="groupview-title-input" value="' + esc(group.title) + '">' +
           '<button class="icon-btn" id="groupview-settings-btn">\u2699</button>' +
         '</header>' +
         dialStatus +
@@ -1793,13 +2041,27 @@
   function editorMenuBtnHtml() {
     return '<button class="fab-secondary" id="note-menu-open-btn" data-menu-note="' + currentNoteId + '" data-menu-group="' + (currentGroupId || "") + '">\u22EE</button>';
   }
+  // Photos render large and inline in the note itself (not a strip of tiny thumbnails),
+  // as a single big image or, with more than one, a swipeable carousel with dots \u2014 tapping
+  // any of them opens the full-screen zoom viewer.
   function renderAttachmentsHtml(note) {
-    var photos = (note.images || []).map(function (img) {
-      return '<div class="photo-thumb"><img src="' + img.dataUrl + '"><button class="photo-remove" data-remove-photo="' + img.id + '">\u00D7</button></div>';
-    }).join("");
-    var photosBlock = photos
-      ? '<div class="section-label">Photos</div><div class="photo-strip">' + photos + '</div>'
-      : "";
+    var images = note.images || [];
+    var photosBlock = "";
+    if (images.length) {
+      var slides = images.map(function (img, idx) {
+        return '<div class="photo-slide" data-view-photo="' + idx + '">' +
+            '<img src="' + img.dataUrl + '">' +
+            '<button class="photo-remove" data-remove-photo="' + img.id + '">\u00D7</button>' +
+          '</div>';
+      }).join("");
+      var dots = images.length > 1
+        ? '<div class="photo-dots">' + images.map(function (_, idx) { return '<div class="photo-dot' + (idx === 0 ? " active" : "") + '" data-dot="' + idx + '"></div>'; }).join("") + '</div>'
+        : "";
+      photosBlock = '<div class="photo-carousel-wrap">' +
+          '<div class="photo-carousel" id="photo-carousel">' + slides + '</div>' +
+          dots +
+        '</div>';
+    }
     return (
       photosBlock +
       '<input type="file" accept="image/*" id="photo-input" style="display:none;">'
@@ -1815,13 +2077,13 @@
         reader.onload = function (ev) {
           var img = new Image();
           img.onload = function () {
-            var maxW = 800;
+            var maxW = 1400;
             var scale = Math.min(1, maxW / img.width);
             var w = Math.max(1, Math.round(img.width * scale)), h = Math.max(1, Math.round(img.height * scale));
             var canvas = document.createElement("canvas");
             canvas.width = w; canvas.height = h;
             canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-            var dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+            var dataUrl = canvas.toDataURL("image/jpeg", 0.88);
             note.images = note.images || [];
             note.images.push({ id: uid("img"), dataUrl: dataUrl });
             saveState(); render();
@@ -1832,12 +2094,168 @@
       });
     }
     document.querySelectorAll("[data-remove-photo]").forEach(function (b) {
-      b.addEventListener("click", function () {
+      b.addEventListener("click", function (e) {
+        e.stopPropagation();
         var id = b.getAttribute("data-remove-photo");
         note.images = (note.images || []).filter(function (i) { return i.id !== id; });
         saveState(); render();
       });
     });
+    document.querySelectorAll("[data-view-photo]").forEach(function (slide) {
+      slide.addEventListener("click", function (e) {
+        if (e.target.closest("[data-remove-photo]")) return;
+        var idx = parseInt(slide.getAttribute("data-view-photo"), 10);
+        openImageViewer((note.images || []).map(function (i) { return i.dataUrl; }), idx);
+      });
+    });
+    var carousel = document.getElementById("photo-carousel");
+    var dotsWrap = document.querySelector(".photo-dots");
+    if (carousel && dotsWrap) {
+      carousel.addEventListener("scroll", function () {
+        var idx = Math.round(carousel.scrollLeft / carousel.clientWidth);
+        dotsWrap.querySelectorAll(".photo-dot").forEach(function (d, i) { d.classList.toggle("active", i === idx); });
+      });
+    }
+  }
+
+  // ---------------- full-screen image viewer: zoom (double-tap) + swipe between photos ----------------
+  function renderImageViewerOverlay() {
+    var multi = imageViewerImages.length > 1;
+    var nav = multi
+      ? '<button class="image-viewer-nav image-viewer-prev" id="iv-prev">‹</button>' +
+        '<button class="image-viewer-nav image-viewer-next" id="iv-next">›</button>'
+      : "";
+    var dots = multi
+      ? '<div class="image-viewer-dots">' + imageViewerImages.map(function (_, i) {
+          return '<div class="image-viewer-dot' + (i === imageViewerIndex ? " active" : "") + '"></div>';
+        }).join("") + '</div>'
+      : "";
+    return (
+      '<div class="image-viewer-overlay" id="image-viewer-overlay">' +
+        '<button class="image-viewer-close" id="image-viewer-close">×</button>' +
+        '<div class="image-viewer-stage" id="image-viewer-stage">' +
+          '<img id="image-viewer-img" src="' + imageViewerImages[imageViewerIndex] + '" draggable="false">' +
+        '</div>' +
+        nav + dots +
+      '</div>'
+    );
+  }
+  function bindImageViewer() {
+    var overlay = document.getElementById("image-viewer-overlay");
+    if (!overlay) return;
+    var stage = document.getElementById("image-viewer-stage");
+    var img = document.getElementById("image-viewer-img");
+    var multi = imageViewerImages.length > 1;
+    document.getElementById("image-viewer-close").addEventListener("click", closeImageViewer);
+    overlay.addEventListener("click", function (e) { if (e.target === overlay) closeImageViewer(); });
+    var prevBtn = document.getElementById("iv-prev"), nextBtn = document.getElementById("iv-next");
+    function goTo(idx) {
+      if (idx < 0 || idx >= imageViewerImages.length) return;
+      imageViewerIndex = idx; render();
+    }
+    if (prevBtn) prevBtn.addEventListener("click", function (e) { e.stopPropagation(); goTo(imageViewerIndex - 1); });
+    if (nextBtn) nextBtn.addEventListener("click", function (e) { e.stopPropagation(); goTo(imageViewerIndex + 1); });
+
+    // Zoom state lives only for this render cycle (reset whenever the viewer re-renders,
+    // e.g. on switching images), applied via a CSS transform on the image itself.
+    var MAX_ZOOM = 5;
+    var scale = 1, panX = 0, panY = 0, lastTapTime = 0, dragging = false, dragStartX = 0, dragStartY = 0,
+        panStartX = 0, panStartY = 0, moved = false;
+    // Two-finger pinch tracks every active pointer by id so it can tell one-finger
+    // pan/swipe apart from a two-finger pinch, and hand back to panning smoothly
+    // when the person lifts one finger and keeps the other down.
+    var activePointers = {};
+    var pinching = false, pinchStartDist = 0, pinchStartScale = 1;
+    function applyTransform() {
+      img.style.transform = "translate(" + panX + "px," + panY + "px) scale(" + scale + ")";
+      img.style.cursor = scale > 1 ? "grab" : "zoom-in";
+    }
+    function setZoom(z) {
+      scale = Math.max(1, Math.min(MAX_ZOOM, z));
+      if (scale === 1) { panX = 0; panY = 0; }
+      applyTransform();
+    }
+    function pointerDist(ids) {
+      var p1 = activePointers[ids[0]], p2 = activePointers[ids[1]];
+      return Math.hypot(p1.x - p2.x, p1.y - p2.y);
+    }
+    img.addEventListener("pointerdown", function (e) {
+      try { img.setPointerCapture(e.pointerId); } catch (err) {}
+      activePointers[e.pointerId] = { x: e.clientX, y: e.clientY };
+      var ids = Object.keys(activePointers);
+      if (ids.length >= 2) {
+        pinching = true; dragging = false; moved = true;
+        pinchStartDist = pointerDist(ids.slice(0, 2)) || 1;
+        pinchStartScale = scale;
+      } else {
+        pinching = false; dragging = true; moved = false;
+        dragStartX = e.clientX; dragStartY = e.clientY;
+        panStartX = panX; panStartY = panY;
+      }
+    });
+    img.addEventListener("pointermove", function (e) {
+      if (!activePointers[e.pointerId]) return;
+      activePointers[e.pointerId] = { x: e.clientX, y: e.clientY };
+      var ids = Object.keys(activePointers);
+      if (pinching && ids.length >= 2) {
+        var dist = pointerDist(ids.slice(0, 2));
+        setZoom(pinchStartScale * (dist / pinchStartDist));
+        return;
+      }
+      if (!dragging) return;
+      var dx = e.clientX - dragStartX, dy = e.clientY - dragStartY;
+      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) moved = true;
+      if (scale > 1) {
+        panX = panStartX + dx; panY = panStartY + dy;
+        applyTransform();
+      }
+    });
+    function endPointer(e) {
+      delete activePointers[e.pointerId];
+      try { img.releasePointerCapture(e.pointerId); } catch (err) {}
+      var ids = Object.keys(activePointers);
+      if (pinching) {
+        if (ids.length >= 2) { pinchStartDist = pointerDist(ids.slice(0, 2)) || 1; pinchStartScale = scale; return; }
+        pinching = false;
+        if (scale <= 1.02) setZoom(1);
+        if (ids.length === 1) {
+          // One finger still down after a pinch — resume panning from here instead of dropping the gesture.
+          dragging = true; moved = true;
+          dragStartX = activePointers[ids[0]].x; dragStartY = activePointers[ids[0]].y;
+          panStartX = panX; panStartY = panY;
+        }
+        return true; // signal caller: this was a pinch release, not a tap/swipe
+      }
+      return false;
+    }
+    img.addEventListener("pointerup", function (e) {
+      var wasPinch = endPointer(e);
+      var wasDragging = dragging;
+      dragging = false;
+      if (wasPinch) return;
+      var now = Date.now();
+      if (!moved && now - lastTapTime < 320) {
+        // Double-tap: toggle zoom.
+        setZoom(scale > 1 ? 1 : 2.5);
+        lastTapTime = 0;
+        return;
+      }
+      lastTapTime = now;
+      if (!moved && wasDragging) return; // single tap on the image itself does nothing (close is via backdrop/X)
+      if (scale === 1 && moved && multi) {
+        var dx = e.clientX - dragStartX;
+        if (Math.abs(dx) > 60) { goTo(imageViewerIndex + (dx < 0 ? 1 : -1)); return; }
+      }
+    });
+    img.addEventListener("pointercancel", endPointer);
+    img.addEventListener("dblclick", function (e) { e.preventDefault(); });
+    document.addEventListener("keydown", function onKey(e) {
+      if (!document.getElementById("image-viewer-overlay")) { document.removeEventListener("keydown", onKey); return; }
+      if (e.key === "Escape") closeImageViewer();
+      else if (e.key === "ArrowLeft") goTo(imageViewerIndex - 1);
+      else if (e.key === "ArrowRight") goTo(imageViewerIndex + 1);
+    });
+    applyTransform();
   }
 
   function renderNoteEditor() {
@@ -1845,6 +2263,10 @@
     var group = currentGroupId ? findGroup(currentGroupId) : null;
     var forceEntry = editorUseForceOverlay && sessionForced[currentGroupId] && sessionForced[currentGroupId][currentNoteId];
     var isForced = !!(forceEntry && forceEntry.rules && forceEntry.rules.length);
+    // An image pool value can't be inlined into a plain textarea, so a forced tag that
+    // resolves to one gets a small read-only HTML view with the image inline instead —
+    // everything else (plain text forcing, editing, dialing) is unaffected.
+    var isForcedImage = isForced && forceEntry.overrideText == null && forcedContentHasImage(buildTokens(note), forceEntry.rules);
     var dialTag = !isForced ? noteDialTag(note, group) : null;
     var wordOverride = dialTag ? noteWordOverride[note.id] : null;
     var bodyValue = isForced
@@ -1858,32 +2280,39 @@
         (wordOverride ? " \u2014 showing: " + esc(wordOverride) : " \u2014 hold an edge to dial this word") + '.</div>';
     }
 
-    var extra = "";
-    if (isMagic() && currentGroupId) {
+    var tagChipBar = "";
+    if (isMagic() && currentGroupId && group.categories.length) {
       var chips = group.categories.map(function (c) {
         return '<div class="chip" style="background:' + c.color + '33;" data-tag-cat="' + c.id + '">' + esc(c.name) + '</div>';
-      }).join("") || '<div class="field-hint">No categories yet \u2014 create one by typing it into a force rule in this trick\u2019s setup.</div>';
-      extra =
-        '<div class="section-label">Tag a selection</div>' +
-        '<div class="field-hint">Select a word or phrase like you would to copy it, then tap a category below. To remove a tag, tap into that word (or select it) and tap its category again.</div>' +
-        '<div class="chip-row">' + chips + '</div>';
+      }).join("");
+      tagChipBar = '<div class="tag-chip-bar" id="tag-chip-bar">' + chips + '</div>';
     }
-    var bodyField = showOverlay
+    var bodyField = isForcedImage
+      ? '<div class="body-forced-image">' + forcedContentHtml(buildTokens(note), forceEntry.rules) + '</div>'
+      : showOverlay
       ? '<div class="body-editor-wrap">' +
           '<div class="body-highlight-overlay" id="body-highlight-overlay">' + renderTagPreviewHtml(findGroup(currentGroupId), note) + '</div>' +
           '<textarea id="note-text" class="body-textarea with-overlay" placeholder="Note">' + esc(bodyValue) + '</textarea>' +
         '</div>'
       : '<textarea id="note-text" class="body-textarea" placeholder="Note">' + esc(bodyValue) + '</textarea>';
+    // Photos sit inline between the two text fields, so text can go before AND after them
+    // instead of everything being pushed into one block with photos tacked on at the end.
+    var afterField = (note.images && note.images.length)
+      ? '<textarea id="note-text-after" class="body-textarea" placeholder="More text…" style="min-height:80px;">' + esc(note.textAfter || "") + '</textarea>'
+      : "";
+    var bottomBar = tagChipBar ? '<div class="editor-bottom-bar" id="editor-bottom-bar">' + tagChipBar + '</div>' : "";
     return (
       '<div class="screen">' +
-        '<header><button class="back-btn" id="editor-back">\u2190</button></header>' +
+        '<header><button class="back-btn" id="editor-back">' + BACK_ARROW_SVG + '</button></header>' +
         dialStatus +
-        '<div class="editor-wrap">' +
+        '<div class="editor-wrap" id="note-editor-wrap">' +
           forcedBadge +
-          '<input type="text" id="note-title" class="title-input" placeholder="Title" value="' + esc(note.title) + '">' +
+          '<textarea id="note-title" class="title-input" placeholder="Title" rows="1">' + esc(note.title) + '</textarea>' +
           bodyField +
-          '<div class="editor-extra">' + extra + renderAttachmentsHtml(note) + '</div>' +
+          '<div class="editor-extra">' + renderAttachmentsHtml(note) + '</div>' +
+          afterField +
         '</div>' +
+        bottomBar +
         editorMenuBtnHtml() +
         renderNoteMenu() + renderMoveMenu() +
       '</div>'
@@ -1915,10 +2344,10 @@
     }
     return (
       '<div class="screen">' +
-        '<header><button class="back-btn" id="editor-back">\u2190</button></header>' +
+        '<header><button class="back-btn" id="editor-back">' + BACK_ARROW_SVG + '</button></header>' +
         lfStatus +
         '<div class="editor-wrap">' +
-          '<input type="text" id="note-title" class="title-input" placeholder="Title" value="' + esc(note.title) + '">' +
+          '<textarea id="note-title" class="title-input" placeholder="Title" rows="1">' + esc(note.title) + '</textarea>' +
           '<div class="list-items-wrap">' + rows + '</div>' +
           '<div class="editor-extra">' + renderAttachmentsHtml(note) + '</div>' +
         '</div>' +
@@ -1932,7 +2361,7 @@
     var note = getNote(currentGroupId, currentNoteId);
     return (
       '<div class="screen">' +
-        '<header><button class="back-btn" id="lf-setup-back">\u2190</button><h1 style="font-size:17px;">List force setup</h1></header>' +
+        '<header><button class="back-btn" id="lf-setup-back">' + BACK_ARROW_SVG + '</button><h1 style="font-size:17px;">List force setup</h1></header>' +
         '<div class="body-scroll">' +
           '<div class="field-hint">This works like a real "one item per number" force \u2014 pick any position, and once armed, dialing a number swaps whatever\u2019s really there for the word below, only for as long as you\u2019re viewing this list.</div>' +
           '<div class="section-label">Word to force</div>' +
@@ -1949,15 +2378,27 @@
     );
   }
 
+  var DRAW_COLORS = ["#202124", "#C5221F", "#1A73E8", "#188038", "#F9AB00", "#8430CE"];
   function renderDrawingEditor() {
     var note = getNote(currentGroupId, currentNoteId);
+    if (!note.drawTool) note.drawTool = "pen";
+    if (!note.drawColor) note.drawColor = DRAW_COLORS[0];
+    var swatches = DRAW_COLORS.map(function (c) {
+      return '<div class="draw-swatch' + (note.drawTool === "pen" && note.drawColor === c ? " selected" : "") + '" style="background:' + c + ';" data-draw-color="' + c + '"></div>';
+    }).join("");
+    var toolbar =
+      '<div class="draw-toolbar">' +
+        '<div class="draw-swatch-row">' + swatches + '</div>' +
+        '<button type="button" class="fmt-btn' + (note.drawTool === "eraser" ? " draw-tool-active" : "") + '" id="draw-eraser-btn" title="Eraser">\u232b</button>' +
+      '</div>';
     return (
       '<div class="screen">' +
-        '<header><button class="back-btn" id="editor-back">\u2190</button><div class="spacer"></div><button class="btn btn-sm btn-ghost" id="clear-drawing-btn">Clear</button></header>' +
+        '<header><button class="back-btn" id="editor-back">' + BACK_ARROW_SVG + '</button><div class="spacer"></div></header>' +
         '<div class="editor-wrap">' +
-          '<input type="text" id="note-title" class="title-input" placeholder="Title" value="' + esc(note.title) + '">' +
+          '<textarea id="note-title" class="title-input" placeholder="Title" rows="1">' + esc(note.title) + '</textarea>' +
+          toolbar +
           '<div style="flex:1; border:1px solid var(--border); border-radius:10px; overflow:hidden; margin-top:8px;">' +
-            '<canvas id="draw-canvas" style="width:100%; height:100%; display:block; touch-action:none; background:var(--surface);"></canvas>' +
+            '<canvas id="draw-canvas" style="width:100%; height:100%; display:block; touch-action:none; background:#FFFFFF;"></canvas>' +
           '</div>' +
           '<div class="editor-extra">' + renderAttachmentsHtml(note) + '</div>' +
         '</div>' +
@@ -2023,12 +2464,38 @@
     //   existing long-press options instead — decided at release, since by then we know
     //   for certain whether a drag happened.
     var pressTimer = null, holdComplete = false, dragging = false, startX = 0, startY = 0,
-        clone = null, dragStartLeft = 0, dragStartTop = 0, moved = false, skip = false, handleGrab = false;
+        clone = null, dragStartLeft = 0, dragStartTop = 0, moved = false, skip = false, handleGrab = false,
+        dropLine = null, dragAfter = false;
     var LONG_MS = opts.longPressMs || 500;
     var MOVE_THRESHOLD = 10;
     var DRAG_THRESHOLD = 6; // smaller once the hold has already established intent
 
     el.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+
+    // Shows a thin line between the two cards the dragged item would land between —
+    // on whichever edge of the hovered card the pointer is closer to. Grid layouts
+    // (the note/group cards) split left/right; plain vertical lists (drag-handle
+    // rows) split top/bottom.
+    function removeDropLine() { if (dropLine) { dropLine.remove(); dropLine = null; } }
+    function updateDropLine(clientX, clientY) {
+      var elUnder = document.elementFromPoint(clientX, clientY);
+      var target = elUnder && elUnder.closest("[data-drag-id]");
+      if (!target || target === el) { removeDropLine(); return; }
+      var rect = target.getBoundingClientRect();
+      var isGrid = target.parentElement && getComputedStyle(target.parentElement).display === "grid";
+      if (!dropLine) { dropLine = document.createElement("div"); dropLine.className = "reorder-drop-line"; document.body.appendChild(dropLine); }
+      if (isGrid) {
+        dragAfter = clientX > rect.left + rect.width / 2;
+        dropLine.className = "reorder-drop-line reorder-drop-line-v";
+        dropLine.style.top = rect.top + "px"; dropLine.style.height = rect.height + "px";
+        dropLine.style.left = (dragAfter ? rect.right - 2 : rect.left - 1) + "px";
+      } else {
+        dragAfter = clientY > rect.top + rect.height / 2;
+        dropLine.className = "reorder-drop-line reorder-drop-line-h";
+        dropLine.style.left = rect.left + "px"; dropLine.style.width = rect.width + "px";
+        dropLine.style.top = (dragAfter ? rect.bottom - 2 : rect.top - 1) + "px";
+      }
+    }
 
     function beginDrag(e) {
       dragging = true;
@@ -2046,7 +2513,6 @@
     el.addEventListener("pointerdown", function (e) {
       handleGrab = !!opts.wholeCardDrag || !!(opts.handleSelector && e.target.closest(opts.handleSelector));
       if (!handleGrab && (e.target.closest(".card-menu-btn") || e.target.closest("input,select,textarea,button,label"))) { skip = true; return; }
-      e.preventDefault();
       skip = false; holdComplete = false; dragging = false; moved = false;
       startX = e.clientX; startY = e.clientY;
       clearTimeout(pressTimer);
@@ -2054,10 +2520,17 @@
         // A dedicated handle (touch-action:none, baked into its own CSS) — safe to
         // start the drag immediately, no threshold needed since native scroll can't
         // claim this touch to begin with.
+        e.preventDefault();
         moved = true;
         if (opts.dragId) beginDrag(e);
         return;
       }
+      // No handle: don't preventDefault here. Calling it on pointerdown suppresses the
+      // browser's native touch-scroll gesture for the whole touch before we've even seen
+      // whether the user is scrolling or holding — which silently killed touch scrolling
+      // (including the scroll-dial input) on any drag that starts on top of a card. Native
+      // scroll now stays fully live from the first touch; we only preventDefault once we
+      // actually commit to a drag, in pointermove below.
       pressTimer = setTimeout(function () {
         if (moved || dragging) return;
         holdComplete = true; // armed: a release now fires the long-press options, movement now starts a drag
@@ -2070,6 +2543,7 @@
       if (dragging && clone) {
         clone.style.left = (dragStartLeft + dx) + "px";
         clone.style.top = (dragStartTop + dy) + "px";
+        updateDropLine(e.clientX, e.clientY);
         return;
       }
       if (handleGrab) return; // handle drags start immediately in pointerdown; nothing to detect here
@@ -2100,8 +2574,9 @@
         var targetCard = elUnder && elUnder.closest("[data-drag-id]");
         if (targetCard) {
           var targetId = targetCard.getAttribute("data-drag-id");
-          if (targetId !== opts.dragId && opts.onReorder) opts.onReorder(opts.dragId, targetId);
+          if (targetId !== opts.dragId && opts.onReorder) opts.onReorder(opts.dragId, targetId, dragAfter);
         }
+        removeDropLine();
         return;
       }
       if (holdComplete) {
@@ -2119,6 +2594,7 @@
       clearTimeout(pressTimer);
       if (clone) { clone.remove(); clone = null; }
       el.style.opacity = ""; dragging = false; handleGrab = false; holdComplete = false;
+      removeDropLine();
     });
   }
 
@@ -2211,6 +2687,7 @@
               if (homeReorderActive) return;
               if (!multiSelectActive) { multiSelectActive = true; multiSelectIds = {}; multiSelectContext = null; }
               if (multiSelectIds[gid]) delete multiSelectIds[gid]; else multiSelectIds[gid] = true;
+              if (!Object.keys(multiSelectIds).length) exitMultiSelect();
             },
             afterLongPress: function () { render(); },
             onReorder: multiSelectActive ? null : reorderHome
@@ -2229,6 +2706,7 @@
               if (homeReorderActive) return;
               if (!multiSelectActive) { multiSelectActive = true; multiSelectIds = {}; multiSelectContext = null; }
               if (multiSelectIds[nid]) delete multiSelectIds[nid]; else multiSelectIds[nid] = true;
+              if (!Object.keys(multiSelectIds).length) exitMultiSelect();
             },
             afterLongPress: function () { render(); },
             onReorder: multiSelectActive ? null : reorderHome
@@ -2250,7 +2728,8 @@
       document.getElementById("preview-rows").addEventListener("input", function (e) {
         group.previewRows = Math.max(1, parseInt(e.target.value, 10) || 3); saveState();
       });
-      document.getElementById("export-trick-btn").addEventListener("click", function () { openExportScreen(currentGroupId); });
+      var exportTrickBtn = document.getElementById("export-trick-btn");
+      if (exportTrickBtn) exportTrickBtn.addEventListener("click", function () { openExportScreen(currentGroupId); });
       document.getElementById("delete-group-btn").addEventListener("click", function () {
         showConfirm("Delete this group note and everything in it?", function () { deleteGroup(currentGroupId); });
       });
@@ -2260,7 +2739,7 @@
           attachCardGesture(row, {
             dragId: row.getAttribute("data-drag-id"),
             handleSelector: ".drag-handle",
-            onReorder: function (draggedId, targetId) { reorderGroupCategories(currentGroupId, draggedId, targetId); }
+            onReorder: function (draggedId, targetId, after) { reorderGroupCategories(currentGroupId, draggedId, targetId, after); }
           });
         });
         document.getElementById("add-cat-btn").addEventListener("click", function () { addCategoryToGroup(group); render(); });
@@ -2276,10 +2755,16 @@
         document.querySelectorAll("[data-cat-name]").forEach(function (input) {
           var catId = input.getAttribute("data-cat-name");
           var suggestBox = document.querySelector('[data-suggest-for="' + catId + '"]');
+          var resolved = false; // tapping a suggestion also blurs the input, which fires its own
+          // resolve() for the same pick — the second call would re-render into a DOM that the
+          // first render() is already tearing down (crashes with a NotFoundError on innerHTML).
+          // Only the first resolve wins; each fresh render/bind gets its own flag.
           var resolve = function (nameOverride) {
+            if (resolved) return;
             var cat = findCategoryInGroup(group, catId);
             var name = (nameOverride != null ? nameOverride : input.value).trim();
-            if (!name) { input.value = cat.name; return; }
+            if (!name) { input.value = cat.name; return; } // no render this time — leave the guard open for a later real edit
+            resolved = true;
             input.value = name;
             cat.name = name;
             var matchedPool = state.pools.find(function (p) { return p.name.toLowerCase() === name.toLowerCase(); });
@@ -2343,6 +2828,12 @@
 
     if (route === "groupView") {
       document.getElementById("groupview-back").addEventListener("click", goBack);
+      var gvGroup = findGroup(currentGroupId);
+      var gvTitleInput = document.getElementById("groupview-title");
+      if (gvTitleInput) {
+        gvTitleInput.addEventListener("input", function (e) { gvGroup.title = e.target.value; saveState(); });
+        gvTitleInput.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); gvTitleInput.blur(); } });
+      }
       var gvSettingsBtn = document.getElementById("groupview-settings-btn");
       if (gvSettingsBtn) gvSettingsBtn.addEventListener("click", function () { openGroupSetup(currentGroupId); });
       var addNoteFabBtn = document.getElementById("add-note-fab");
@@ -2364,9 +2855,10 @@
             if (gvReorderActive) return;
             if (!multiSelectActive) { multiSelectActive = true; multiSelectIds = {}; multiSelectContext = currentGroupId; }
             if (multiSelectIds[id]) delete multiSelectIds[id]; else multiSelectIds[id] = true;
+            if (!Object.keys(multiSelectIds).length) exitMultiSelect();
           },
           afterLongPress: function () { render(); },
-          onReorder: multiSelectActive ? null : function (draggedId, targetId) { reorderGroupNotes(currentGroupId, draggedId, targetId); }
+          onReorder: multiSelectActive ? null : function (draggedId, targetId, after) { reorderGroupNotes(currentGroupId, draggedId, targetId, after); }
         });
       });
       bindNoteMenuButtons();
@@ -2420,11 +2912,32 @@
       }
 
       document.getElementById("editor-back").addEventListener("click", goBack);
+      bindTitleField(document.getElementById("note-title"), "note-text");
       document.getElementById("note-title").addEventListener("input", function (e) { note.title = e.target.value; saveState(); });
       bindNoteMenuButtons();
       bindAttachments(note);
+      if (isForcedView) {
+        var forcedImages = forcedContentImages(buildTokens(note), forceEntry2.rules);
+        document.querySelectorAll("[data-forced-img-idx]").forEach(function (img) {
+          img.addEventListener("click", function () {
+            openImageViewer(forcedImages, parseInt(img.getAttribute("data-forced-img-idx"), 10));
+          });
+        });
+      }
+      var afterTa = document.getElementById("note-text-after");
+      if (afterTa) afterTa.addEventListener("input", function (e) { note.textAfter = e.target.value; saveState(); });
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener("resize", positionEditorBottomBar);
+        window.visualViewport.removeEventListener("scroll", positionEditorBottomBar);
+        if (document.getElementById("editor-bottom-bar")) {
+          window.visualViewport.addEventListener("resize", positionEditorBottomBar);
+          window.visualViewport.addEventListener("scroll", positionEditorBottomBar);
+        }
+      }
+      positionEditorBottomBar();
 
       var ta = document.getElementById("note-text");
+      if (ta) {
       var overlay = document.getElementById("body-highlight-overlay");
       if (overlay) ta.addEventListener("scroll", function () { overlay.scrollTop = ta.scrollTop; overlay.scrollLeft = ta.scrollLeft; });
       ["mouseup","touchend","keyup","select"].forEach(function (ev) {
@@ -2484,11 +2997,13 @@
           });
         });
       }
+      }
     }
 
     if (route === "listEditor") {
       var lnote = getNote(currentGroupId, currentNoteId);
       document.getElementById("editor-back").addEventListener("click", goBack);
+      bindTitleField(document.getElementById("note-title"), null);
       document.getElementById("note-title").addEventListener("input", function (e) { lnote.title = e.target.value; saveState(); });
       bindNoteMenuButtons();
       bindAttachments(lnote);
@@ -2592,7 +3107,7 @@
           attachCardGesture(row, {
             dragId: row.getAttribute("data-drag-id"),
             handleSelector: ".drag-handle",
-            onReorder: function (draggedId, targetId) { reorderPoolValues(pool, draggedId, targetId); }
+            onReorder: function (draggedId, targetId, after) { reorderPoolValues(pool, draggedId, targetId, after); }
           });
         });
         document.querySelectorAll("[data-del-value]").forEach(function (b) {
@@ -2602,11 +3117,34 @@
             saveState(); render();
           });
         });
+        // Edit an existing text value in place. Commit as the person types (so a
+        // dial or force referencing this pool always sees the latest text), but only
+        // enforce the duplicate/conflict checks on blur so mid-edit states don't get
+        // rejected while they're still typing.
+        document.querySelectorAll("[data-edit-value]").forEach(function (inp) {
+          var idx = parseInt(inp.getAttribute("data-edit-value"), 10);
+          var prevValue = pool.values[idx];
+          inp.addEventListener("input", function () {
+            pool.values[idx] = inp.value;
+            saveState();
+          });
+          inp.addEventListener("blur", function () {
+            var val = inp.value.trim();
+            if (!val) { pool.values[idx] = prevValue; saveState(); render(); return; }
+            var dup = pool.values.some(function (v, i) { return i !== idx && !isImageValue(v) && v.toLowerCase() === val.toLowerCase(); });
+            if (dup) { showToast("Already in this pool"); pool.values[idx] = prevValue; saveState(); render(); return; }
+            var conflict = poolValueConflict(pool.id, val);
+            if (conflict) { showToast('"' + val + '" is already in "' + conflict.name + '"'); pool.values[idx] = prevValue; saveState(); render(); return; }
+            pool.values[idx] = val;
+            saveState();
+          });
+          inp.addEventListener("keydown", function (e) { if (e.key === "Enter") inp.blur(); });
+        });
         document.getElementById("add-pool-value-btn").addEventListener("click", function () {
           var input = document.getElementById("new-pool-value");
           var val = input.value.trim();
           if (!val) return;
-          var dup = pool.values.some(function (v) { return v.toLowerCase() === val.toLowerCase(); });
+          var dup = pool.values.some(function (v) { return !isImageValue(v) && v.toLowerCase() === val.toLowerCase(); });
           if (dup) { showToast("Already in this pool"); return; }
           var conflict = poolValueConflict(pool.id, val);
           if (conflict) { showToast('"' + val + '" is already in "' + conflict.name + '"'); return; }
@@ -2615,12 +3153,55 @@
           input.value = "";
           render();
         });
+        var poolImgBtn = document.getElementById("add-pool-image-btn");
+        var poolImgInput = document.getElementById("pool-image-input");
+        var poolImgEditIdx = null; // null = adding a new value; otherwise the index of the value being replaced
+        function readAndStoreImage(file, onDataUrl) {
+          var reader = new FileReader();
+          reader.onload = function (ev) {
+            var img = new Image();
+            img.onload = function () {
+              var maxW = 800;
+              var scale = Math.min(1, maxW / img.width);
+              var w = Math.max(1, Math.round(img.width * scale)), h = Math.max(1, Math.round(img.height * scale));
+              var canvas = document.createElement("canvas");
+              canvas.width = w; canvas.height = h;
+              canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+              onDataUrl(canvas.toDataURL("image/jpeg", 0.85));
+            };
+            img.src = ev.target.result;
+          };
+          reader.readAsDataURL(file);
+        }
+        if (poolImgBtn && poolImgInput) {
+          poolImgBtn.addEventListener("click", function () { poolImgEditIdx = null; poolImgInput.click(); });
+          document.querySelectorAll("[data-edit-image-value]").forEach(function (thumb) {
+            thumb.addEventListener("click", function () {
+              poolImgEditIdx = parseInt(thumb.getAttribute("data-edit-image-value"), 10);
+              poolImgInput.click();
+            });
+          });
+          poolImgInput.addEventListener("change", function (e) {
+            var file = e.target.files && e.target.files[0];
+            if (!file) return;
+            readAndStoreImage(file, function (dataUrl) {
+              if (poolImgEditIdx != null && pool.values[poolImgEditIdx] != null) {
+                var existing = pool.values[poolImgEditIdx];
+                pool.values[poolImgEditIdx] = { type: "image", id: isImageValue(existing) ? existing.id : uid("img"), dataUrl: dataUrl };
+              } else {
+                pool.values.push({ type: "image", id: uid("img"), dataUrl: dataUrl });
+              }
+              poolImgInput.value = "";
+              saveState(); render();
+            });
+          });
+        }
       } else {
         document.querySelectorAll("[data-drag-id^='colval:']").forEach(function (row) {
           attachCardGesture(row, {
             dragId: row.getAttribute("data-drag-id"),
             handleSelector: ".drag-handle",
-            onReorder: function (draggedId, targetId) { reorderPoolColumnValues(pool, draggedId, targetId); }
+            onReorder: function (draggedId, targetId, after) { reorderPoolColumnValues(pool, draggedId, targetId, after); }
           });
         });
         document.getElementById("add-column-btn").addEventListener("click", function () {
@@ -2663,6 +3244,26 @@
             saveState(); render();
           });
         });
+        document.querySelectorAll("[data-edit-col-value]").forEach(function (inp) {
+          var parts = inp.getAttribute("data-edit-col-value").split(":");
+          var ci = parseInt(parts[0], 10), vi = parseInt(parts[1], 10);
+          var prevValue = pool.columns[ci].values[vi];
+          inp.addEventListener("input", function () {
+            pool.columns[ci].values[vi] = inp.value;
+            saveState();
+          });
+          inp.addEventListener("blur", function () {
+            var val = inp.value.trim();
+            if (!val) { pool.columns[ci].values[vi] = prevValue; saveState(); render(); return; }
+            var dup = pool.columns[ci].values.some(function (v, i) { return i !== vi && v.toLowerCase() === val.toLowerCase(); });
+            if (dup) { showToast("Already in this column"); pool.columns[ci].values[vi] = prevValue; saveState(); render(); return; }
+            var conflict = poolValueConflict(pool.id, val);
+            if (conflict) { showToast('"' + val + '" is already in "' + conflict.name + '"'); pool.columns[ci].values[vi] = prevValue; saveState(); render(); return; }
+            pool.columns[ci].values[vi] = val;
+            saveState();
+          });
+          inp.addEventListener("keydown", function (e) { if (e.key === "Enter") inp.blur(); });
+        });
         document.getElementById("pool-separator").addEventListener("input", function (e) {
           pool.columnSeparator = e.target.value; saveState();
         });
@@ -2681,8 +3282,13 @@
           if (target === "pools") openPoolsList();
           else if (target === "dial") openSettings();
           else if (target === "exportimport") { exportImportOutput = ""; openExportImport(); }
+          else if (target === "docs") openDocs();
         });
       });
+    }
+
+    if (route === "docs") {
+      document.getElementById("docs-back").addEventListener("click", goBack);
     }
 
     if (route === "exportImport") {
@@ -2761,10 +3367,11 @@
       document.getElementById("settings-back").addEventListener("click", function () { dialClearSession(); goBack(); });
       document.getElementById("dial-enabled").addEventListener("change", function () { toggleDialEnabled(); });
       document.querySelectorAll('input[name="dialmode"]').forEach(function (r) {
-        r.addEventListener("change", function () { state.dialSettings.inputMode = r.value; saveState(); });
+        r.addEventListener("change", function () { state.dialSettings.inputMode = r.value; saveState(); render(); });
       });
       document.getElementById("dial-haptics").addEventListener("change", function (e) { state.dialSettings.haptics = e.target.checked; saveState(); });
       document.getElementById("dial-invert").addEventListener("change", function (e) { state.dialSettings.invertDrag = e.target.checked; saveState(); });
+      document.getElementById("dial-show-onscreen").addEventListener("change", function (e) { state.dialSettings.showOnScreen = e.target.checked; saveState(); });
       document.getElementById("dial-hold").addEventListener("input", function (e) {
         state.dialSettings.holdMs = parseInt(e.target.value, 10);
         saveState();
@@ -2800,6 +3407,7 @@
     if (route === "drawingEditor") {
       var dnote = getNote(currentGroupId, currentNoteId);
       document.getElementById("editor-back").addEventListener("click", goBack);
+      bindTitleField(document.getElementById("note-title"), null);
       document.getElementById("note-title").addEventListener("input", function (e) { dnote.title = e.target.value; saveState(); });
       bindNoteMenuButtons();
       bindAttachments(dnote);
@@ -2808,7 +3416,12 @@
       canvas.width = Math.max(1, Math.round(rect.width));
       canvas.height = Math.max(1, Math.round(rect.height));
       var ctx = canvas.getContext("2d");
-      ctx.lineWidth = 3; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#202124";
+      ctx.lineCap = "round"; ctx.lineJoin = "round";
+      function applyTool() {
+        if (dnote.drawTool === "eraser") { ctx.globalCompositeOperation = "destination-out"; ctx.lineWidth = 16; }
+        else { ctx.globalCompositeOperation = "source-over"; ctx.strokeStyle = dnote.drawColor || DRAW_COLORS[0]; ctx.lineWidth = 3; }
+      }
+      applyTool();
       if (dnote.drawingData) {
         var img = new Image();
         img.onload = function () { ctx.drawImage(img, 0, 0, canvas.width, canvas.height); };
@@ -2823,9 +3436,17 @@
           if (drawing) { drawing = false; dnote.drawingData = canvas.toDataURL("image/png"); saveState(); }
         });
       });
-      document.getElementById("clear-drawing-btn").addEventListener("click", function () {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        dnote.drawingData = null; saveState();
+      document.querySelectorAll("[data-draw-color]").forEach(function (sw) {
+        sw.addEventListener("click", function () {
+          dnote.drawTool = "pen";
+          dnote.drawColor = sw.getAttribute("data-draw-color");
+          saveState(); render();
+        });
+      });
+      var eraserBtn = document.getElementById("draw-eraser-btn");
+      if (eraserBtn) eraserBtn.addEventListener("click", function () {
+        dnote.drawTool = dnote.drawTool === "eraser" ? "pen" : "eraser";
+        saveState(); render();
       });
     }
 
