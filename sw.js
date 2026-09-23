@@ -1,7 +1,7 @@
 // Minimal service worker: caches the app shell so it installs as a PWA and
 // still opens offline. Bump CACHE_NAME whenever index.html changes so the
 // new version gets picked up instead of a stale cached copy.
-var CACHE_NAME = "notary-cache-v1";
+var CACHE_NAME = "notary-cache-v14";
 var ASSETS = [
   "./",
   "./index.html",
