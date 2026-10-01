@@ -90,12 +90,17 @@
     display:flex; align-items:center; justify-content:center; }
 
   .body-scroll { flex:1; overflow-y:auto; padding:4px 12px 90px; }
-  .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; align-items:start; }
+  /* Masonry via CSS columns rather than a row-based grid: with a grid, each row's height is
+     set by its tallest card, so a short card can end up with a big gap underneath it whenever
+     its row-mate is taller. Columns give every card the same fixed margin below it instead,
+     at the cost of top-to-bottom-then-across reading order (same trade Google Keep makes). */
+  .grid { column-count:2; column-gap:10px; }
   .card { position:relative; border-radius:10px; padding:12px; min-width:0; overflow:hidden;
     border:1px solid var(--border); background:var(--surface); cursor:pointer; color:var(--text);
-    user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
+    user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;
+    break-inside:avoid; -webkit-column-break-inside:avoid; margin-bottom:10px; }
   /* A trick/group note is a stack of notes, so it gets a second sheet peeking out behind it. */
-  .card.card-group { box-shadow: 3px 3px 0 0 var(--border); margin-right:2px; margin-bottom:2px; }
+  .card.card-group { box-shadow: 3px 3px 0 0 var(--border); }
   .card-title { font-weight:700; font-size:15px; margin-bottom:4px; padding-right:22px; overflow-wrap:break-word; word-break:break-word; }
   .card-preview { font-size:13px; line-height:1.4; color:inherit; opacity:0.85; white-space:pre-wrap; overflow-wrap:break-word; word-break:break-word; }
   .card-meta { font-size:11.5px; color:inherit; opacity:0.65; margin-top:6px; }
@@ -209,6 +214,11 @@
   .rule-card { border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:10px; background:var(--surface); }
   .rule-grid { display:flex; flex-wrap:wrap; gap:8px; }
   .rule-grid > * { flex:1; min-width:110px; }
+  .trigger-rows { display:flex; flex-direction:column; gap:6px; }
+  .trigger-row { display:flex; gap:8px; align-items:center; }
+  .trigger-row input[type="text"] { flex:1; min-width:0; }
+  .trigger-row input[type="number"] { width:60px; flex:none; }
+  .trigger-remove { flex:none; width:28px; height:28px; border-radius:50%; border:1px solid var(--border); background:var(--surface); color:var(--text-dim); font-size:14px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; }
 
   .editor-wrap { flex:1; display:flex; flex-direction:column; padding:8px 20px 24px; overflow-y:auto; }
   .title-input { border:none !important; background:transparent !important; box-shadow:none !important;
@@ -349,6 +359,7 @@
           });
           delete g.force.rules;
         }
+        g.categories.forEach(ensureCatTriggers);
         (g.notes || []).forEach(migrateNote);
       });
       var notes = Array.isArray(p.notes) ? p.notes : [];
@@ -563,9 +574,22 @@
   function findStandaloneNote(id) { return state.notes.find(function (n) { return n.id === id; }); }
   function getNote(groupId, noteId) { return groupId ? findNoteInGroup(findGroup(groupId), noteId) : findStandaloneNote(noteId); }
   function findCategoryInGroup(group, id) { return (group.categories || []).find(function (c) { return c.id === id; }); }
+  // A plain word category (not pool-linked) can force a different static word at more than
+  // one point in a trick — each occurrence is a { count, word } pair in c.triggers, where
+  // count is which note-open (1-indexed) in the group session it fires on. Pool-linked
+  // categories still use the single c.triggerCount field (they're dialed, not static, so one
+  // occurrence per trick is the supported shape there).
+  function ensureCatTriggers(c) {
+    if (!Array.isArray(c.triggers) || !c.triggers.length) {
+      var legacyWord = typeof c.word === "string" ? c.word : "";
+      var legacyCount = typeof c.triggerCount === "number" ? c.triggerCount : 1;
+      c.triggers = [{ count: legacyCount, word: legacyWord }];
+    }
+  }
+  function catHasWord(c) { return (c.triggers || []).some(function (t) { return t.word && t.word.trim(); }); }
   function addCategoryToGroup(group) {
     var color = CATEGORY_PALETTE[group.categories.length % CATEGORY_PALETTE.length];
-    var cat = { id: uid("cat"), name: "", color: color, poolId: null, word: "", triggerCount: 1, replaceAll: false };
+    var cat = { id: uid("cat"), name: "", color: color, poolId: null, word: "", triggerCount: 1, replaceAll: false, triggers: [{ count: 1, word: "" }] };
     group.categories.push(cat);
     saveState();
     return cat;
@@ -893,7 +917,7 @@
     return { has: has, total: total };
   }
   function groupHasRules(group) {
-    return (group.categories || []).some(function (c) { return c.poolId || (c.word && c.word.trim()); });
+    return (group.categories || []).some(function (c) { return c.poolId || catHasWord(c); });
   }
   function groupPreviewText(group) {
     if (!group.notes.length) return "";
@@ -912,7 +936,7 @@
     var tags = note.tags || [];
     if (!group) return tags.length > 0;
     var activeCatIds = {};
-    (group.categories || []).forEach(function (c) { if (c.poolId || (c.word && c.word.trim())) activeCatIds[c.id] = true; });
+    (group.categories || []).forEach(function (c) { if (c.poolId || catHasWord(c)) activeCatIds[c.id] = true; });
     if (!Object.keys(activeCatIds).length) return true;
     return tags.some(function (t) { return activeCatIds[t.categoryId]; });
   }
@@ -1293,13 +1317,21 @@
     if (!isMagic() && group.force.armed) {
       sessionCounts[groupId] = (sessionCounts[groupId] || 0) + 1;
       var count = sessionCounts[groupId];
-      var candidates = (group.categories || []).filter(function (c) { return c.triggerCount === count && (c.poolId || (c.word && c.word.trim())); });
+      var candidates = (group.categories || []).filter(function (c) {
+        if (c.poolId) return c.triggerCount === count;
+        // A static word category can have several occurrences, each tied to its own
+        // note-open count — it's a candidate whenever one of them matches this count.
+        return (c.triggers || []).some(function (t) { return t.count === count && t.word && t.word.trim(); });
+      });
       if (candidates.length && note.type === "text") {
         var noteCatIds = {};
         buildTokens(note).forEach(function (t) { if (t.type === "tag") noteCatIds[t.categoryId] = true; });
         (note.images || []).forEach(function (im) { if (im.taggedCategoryId) noteCatIds[im.taggedCategoryId] = true; });
         var matching = candidates.filter(function (c) { return noteCatIds[c.id]; }).map(function (c) {
-          if (!c.poolId) return { categoryId: c.id, word: c.word, replaceAll: c.replaceAll };
+          if (!c.poolId) {
+            var trig = (c.triggers || []).find(function (t) { return t.count === count; });
+            return (trig && trig.word && trig.word.trim()) ? { categoryId: c.id, word: trig.word, replaceAll: c.replaceAll } : null;
+          }
           // Each pool-linked category keeps its own dialed value now that a trick can have
           // several (e.g. star sign + card) — this one just needs its own slot filled in.
           var dialedForGroup = dialedPoolValue[groupId];
@@ -1370,6 +1402,7 @@
         if (typeof c.word !== "string") c.word = "";
         if (typeof c.triggerCount !== "number") c.triggerCount = 1;
         if (typeof c.replaceAll !== "boolean") c.replaceAll = false;
+        ensureCatTriggers(c);
         (newGroup.notes || []).forEach(function (n) {
           (n.tags || []).forEach(function (t) { if (t.categoryId === oldCatId) t.categoryId = c.id; });
         });
@@ -1986,11 +2019,27 @@
     var forceSection = "";
     if (isMagic()) {
       var catRows = group.categories.map(function (c) {
+        ensureCatTriggers(c);
         var isPoolLinked = !!c.poolId;
         var pool = isPoolLinked ? findPool(c.poolId) : null;
-        var wordField = isPoolLinked
-          ? '<div style="flex:1; min-width:110px; padding:9px 11px; border:1px dashed var(--border); border-radius:8px; font-size:12.5px; color:var(--text-dim); display:flex; align-items:center;">Set live from pool</div>'
-          : '<input type="text" data-cat-field="word" data-cat-id="' + c.id + '" placeholder="Word to force" value="' + esc(c.word || "") + '">';
+        var middleSection;
+        if (isPoolLinked) {
+          middleSection = '<div class="rule-grid" style="margin-top:8px;">' +
+            '<div style="flex:1; min-width:110px; padding:9px 11px; border:1px dashed var(--border); border-radius:8px; font-size:12.5px; color:var(--text-dim); display:flex; align-items:center;">Set live from pool</div>' +
+            '<input type="number" min="1" data-cat-field="triggerCount" data-cat-id="' + c.id + '" value="' + c.triggerCount + '">' +
+          '</div>';
+        } else {
+          middleSection = '<div class="trigger-rows" style="margin-top:8px;">' +
+            c.triggers.map(function (t, idx) {
+              return '<div class="trigger-row">' +
+                  '<input type="text" data-trigger-word="' + idx + '" data-cat-id="' + c.id + '" placeholder="Word to force" value="' + esc(t.word || "") + '">' +
+                  '<input type="number" min="1" data-trigger-count="' + idx + '" data-cat-id="' + c.id + '" value="' + t.count + '" title="Fires on the Nth note opened in this trick">' +
+                  (c.triggers.length > 1 ? '<button class="trigger-remove" data-trigger-remove="' + idx + '" data-cat-id="' + c.id + '" title="Remove this occurrence">\u2715</button>' : "") +
+                '</div>';
+            }).join("") +
+            '<button class="btn btn-sm btn-ghost" data-trigger-add="' + c.id + '">+ Add another occurrence</button>' +
+          '</div>';
+        }
         return '<div class="rule-card" data-drag-id="cat:' + c.id + '">' +
           '<div class="row-flex">' +
             '<span class="drag-handle">\u2630</span>' +
@@ -2000,10 +2049,7 @@
               '<div class="cat-name-suggest" data-suggest-for="' + c.id + '" style="display:none;"></div>' +
             '</div>' +
           '</div>' +
-          '<div class="rule-grid" style="margin-top:8px;">' +
-            wordField +
-            '<input type="number" min="1" data-cat-field="triggerCount" data-cat-id="' + c.id + '" value="' + c.triggerCount + '">' +
-          '</div>' +
+          middleSection +
           '<div class="row-flex" style="margin-top:8px;">' +
             '<label style="font-size:13px; display:flex; align-items:center; gap:8px;">' +
               '<input type="checkbox" data-cat-field="replaceAll" data-cat-id="' + c.id + '" ' + (c.replaceAll ? "checked" : "") + ' style="width:auto;"> Replace every instance' +
@@ -2022,7 +2068,7 @@
 
       forceSection =
         '<div class="section-label">Categories &amp; forcing</div>' +
-        '<div class="field-hint">Drag the \u2630 handle to reorder. Tag text in a note with a category, then it can force a word \u2014 fixed, or live from a pool.</div>' +
+        '<div class="field-hint">Drag the \u2630 handle to reorder. Tag text in a note with a category, then it can force a word \u2014 fixed, or live from a pool. A plain word category can fire a different word at more than one point in the trick \u2014 add another occurrence below it.</div>' +
         catRows +
         '<div class="btn-row"><button class="btn btn-ghost" id="add-cat-btn">+ Add category</button></div>' +
         poolHint +
@@ -2589,7 +2635,9 @@
       var target = elUnder && elUnder.closest("[data-drag-id]");
       if (!target || target === el) { removeDropLine(); return; }
       var rect = target.getBoundingClientRect();
-      var isGrid = target.parentElement && getComputedStyle(target.parentElement).display === "grid";
+      var parentStyle = target.parentElement && getComputedStyle(target.parentElement);
+      var parentCols = parentStyle ? parseInt(parentStyle.columnCount, 10) : 0;
+      var isGrid = !!parentStyle && (parentStyle.display === "grid" || parentCols > 1);
       if (!dropLine) { dropLine = document.createElement("div"); dropLine.className = "reorder-drop-line"; document.body.appendChild(dropLine); }
       if (isGrid) {
         dragAfter = clientX > rect.left + rect.width / 2;
@@ -2925,6 +2973,50 @@
               armedToggle.disabled = !ready;
               if (!ready) { armedToggle.checked = false; group.force.armed = false; }
             }
+          });
+        });
+        function refreshArmedToggle() {
+          var armedToggle = document.getElementById("force-armed");
+          if (armedToggle) {
+            var ready = groupHasRules(group);
+            armedToggle.disabled = !ready;
+            if (!ready) { armedToggle.checked = false; group.force.armed = false; }
+          }
+        }
+        document.querySelectorAll("[data-trigger-word]").forEach(function (input) {
+          var catId = input.getAttribute("data-cat-id");
+          var idx = parseInt(input.getAttribute("data-trigger-word"), 10);
+          input.addEventListener("input", function () {
+            var cat = findCategoryInGroup(group, catId);
+            cat.triggers[idx].word = input.value;
+            saveState();
+            refreshArmedToggle();
+          });
+        });
+        document.querySelectorAll("[data-trigger-count]").forEach(function (input) {
+          var catId = input.getAttribute("data-cat-id");
+          var idx = parseInt(input.getAttribute("data-trigger-count"), 10);
+          input.addEventListener("input", function () {
+            var cat = findCategoryInGroup(group, catId);
+            cat.triggers[idx].count = Math.max(1, parseInt(input.value, 10) || 1);
+            saveState();
+          });
+        });
+        document.querySelectorAll("[data-trigger-remove]").forEach(function (b) {
+          b.addEventListener("click", function () {
+            var cat = findCategoryInGroup(group, b.getAttribute("data-cat-id"));
+            var idx = parseInt(b.getAttribute("data-trigger-remove"), 10);
+            cat.triggers.splice(idx, 1);
+            if (!cat.triggers.length) cat.triggers.push({ count: 1, word: "" });
+            saveState(); render();
+          });
+        });
+        document.querySelectorAll("[data-trigger-add]").forEach(function (b) {
+          b.addEventListener("click", function () {
+            var cat = findCategoryInGroup(group, b.getAttribute("data-trigger-add"));
+            var nextCount = cat.triggers.length ? Math.max.apply(null, cat.triggers.map(function (t) { return t.count; })) + 1 : 1;
+            cat.triggers.push({ count: nextCount, word: "" });
+            saveState(); render();
           });
         });
         var armedEl = document.getElementById("force-armed");
