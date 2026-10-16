@@ -1,7 +1,7 @@
 // Calculator service worker: caches the app so it opens offline, and lets notifications be tapped.
 // Bump CACHE_NAME whenever any app file changes so phones pick up the new version.
-var CACHE_NAME = "forcecalc-cache-v1";
-var ASSETS = ["./", "./index.html", "./engine.js", "./data.js", "./manifest.json",
+var CACHE_NAME = "forcecalc-cache-v3";
+var ASSETS = ["./", "./index.html", "./engine.js", "./data.js", "./settings.js", "./manifest.json",
   "./icon-192.png", "./icon-512.png", "./icon-512-maskable.png"];
 
 self.addEventListener("install", function (event) {

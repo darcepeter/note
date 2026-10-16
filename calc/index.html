@@ -6,42 +6,58 @@
 <title>Calculator</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
-<meta name="theme-color" content="#000000">
+<meta name="theme-color" content="#100E0D">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <style>
   :root {
-    --calc-bg:#000000; --display-primary:#E8E0D5; --display-secondary:rgba(232,224,213,.6);
-    --btn-num:#1F1B18; --btn-fn:#2D2925; --btn-op:#2D2925; --btn-eq:#F5E6D3; --btn-eq-text:#1A1208;
-    --divider:rgba(255,255,255,.2); --force-banner:#CC3300; --settings-banner:#004499;
+    --bg:#100E0D; --text:#EEE3DF; --text-dim:#B2A9A6;
+    --key-num:#2A2522; --key-op:#413A37; --key-ac:#52443D; --key-ac-text:#E1CCC2; --op-glyph:#C8BDB8;
+    --key-eq:#FFEBD5; --key-eq-glyph:#6D5433;
+    --banner-force:#CC3300; --banner-settings:#004499;
   }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-  html, body { margin:0; height:100%; background:var(--calc-bg); overscroll-behavior:none; }
-  body { display:flex; flex-direction:column; color:var(--display-primary);
-    font-family:Roboto, "Helvetica Neue", system-ui, sans-serif; font-weight:300;
+  html, body { margin:0; height:100%; background:var(--bg); overscroll-behavior:none; }
+  body { display:flex; flex-direction:column; height:100dvh; color:var(--text);
+    font-family:"Google Sans", "Google Sans Text", "Product Sans", Roboto, system-ui, sans-serif; font-weight:400;
     -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; touch-action:manipulation;
     padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
-  #display-area { flex:38 1 0; position:relative; min-height:0; }
+
+  /* top bar: history + overflow (decorative, like the real app) */
+  #top { flex:none; height:56px; display:flex; align-items:center; justify-content:space-between; padding:0 22px; color:var(--text-dim); }
+  #top svg { width:24px; height:24px; fill:currentColor; display:block; }
+
+  /* display: the equation line sits ABOVE the big number, never on top of it */
+  #display-area { flex:1 1 0; min-height:0; position:relative; display:flex; flex-direction:column;
+    justify-content:flex-end; align-items:flex-end; padding:0 24px 8px; overflow:hidden; }
+  #history { color:var(--text-dim); font-size:28px; line-height:36px; min-height:36px; max-width:100%;
+    white-space:nowrap; overflow:hidden; text-overflow:clip; }
+  #main { color:var(--text); font-size:64px; line-height:1.15; max-width:100%; white-space:nowrap; overflow:hidden; font-weight:400; }
   .banner { position:absolute; top:0; left:0; right:0; text-align:center; font-size:12px; font-weight:700;
     color:#fff; padding:4px 0; display:none; }
-  #banner-force { background:var(--force-banner); } #banner-settings { background:var(--settings-banner); }
-  #history { position:absolute; right:0; left:0; bottom:40px; padding:0 16px; text-align:right;
-    color:var(--display-secondary); font-size:24px; white-space:nowrap; overflow:hidden; line-height:1.2; min-height:29px; }
-  #main { position:absolute; right:0; left:0; bottom:8px; padding:0 16px; text-align:right; font-size:57px;
-    white-space:nowrap; overflow:hidden; line-height:1.2; color:var(--display-primary); }
-  /* an invisible, larger touch target so the gestures work anywhere on the display area */
+  #banner-force { background:var(--banner-force); } #banner-settings { background:var(--banner-settings); }
   #hit { position:absolute; inset:0; }
-  #divider { height:1px; background:var(--divider); flex:none; }
-  #keys { flex:62 1 0; display:flex; flex-direction:column; min-height:0; }
-  .row { flex:1 1 0; display:flex; padding:3px; min-height:0; }
-  button { flex:1 1 0; margin:3px; border:0; border-radius:999px; font:inherit; font-weight:300; font-size:22px;
-    color:var(--display-primary); background:var(--btn-num); min-width:0; padding:0; cursor:pointer; position:relative; overflow:hidden; }
-  button:active { filter:brightness(1.6); }
-  button.fn { background:var(--btn-fn); font-size:20px; } button.op { background:var(--btn-op); }
-  button.eq { background:var(--btn-eq); color:var(--btn-eq-text); } button.eq:active { filter:brightness(.85); }
-  button.zero { flex:2 1 0; text-align:left; padding-left:28px; }
+
+  #expander { flex:none; height:44px; padding:0 26px; display:flex; align-items:center; color:var(--text-dim); }
+  #expander svg { width:26px; height:26px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+
+  #keys { flex:0 0 54%; display:flex; flex-direction:column; gap:8px; padding:0 4px 10px; min-height:0; }
+  .row { flex:1 1 0; display:flex; gap:4px; min-height:0; }
+  button { flex:1 1 0; border:0; border-radius:999px; font:inherit; font-size:38px; font-weight:400; color:var(--text);
+    background:var(--key-num); min-width:0; padding:0; margin:0; cursor:pointer; display:flex; align-items:center; justify-content:center;
+    transition:border-radius .12s ease, filter .12s ease; }
+  button:active { border-radius:28px; filter:brightness(1.35); }
+  button svg { width:34px; height:34px; display:block; }
+  button.op, button.fn { background:var(--key-op); color:var(--op-glyph); }
+  button.ac { background:var(--key-ac); color:var(--key-ac-text); font-size:34px; font-weight:500; }
+  button.eq { background:var(--key-eq); color:var(--key-eq-glyph); } button.eq:active { filter:brightness(.88); }
+  button .paren { font-weight:300; font-size:38px; letter-spacing:6px; }
 </style>
 </head>
 <body>
+<div id="top">
+  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6a7 7 0 1 1 2.06 4.94l-1.42 1.42A9 9 0 1 0 13 3zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/></svg>
+</div>
 <div id="display-area">
   <div class="banner" id="banner-force">SET FORCE NUMBER</div>
   <div class="banner" id="banner-settings">SETTINGS</div>
@@ -49,17 +65,36 @@
   <div id="main">0</div>
   <div id="hit"></div>
 </div>
-<div id="divider"></div>
+<div id="expander"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9l5-5 5 5M7 15l5 5 5-5"/></svg></div>
 <div id="keys">
-  <div class="row"><button class="fn" data-k="AC" id="btn-ac">AC</button><button class="fn" data-k="+/-">+/-</button><button class="fn" data-k="%">%</button><button class="op" data-k="÷">÷</button></div>
-  <div class="row"><button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button><button class="op" data-k="×">×</button></div>
-  <div class="row"><button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button><button class="op" data-k="−">−</button></div>
-  <div class="row"><button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button><button class="op" data-k="+">+</button></div>
-  <div class="row"><button class="zero" data-k="0">0</button><button data-k=".">.</button><button class="eq" data-k="=">=</button></div>
+  <div class="row">
+    <button class="ac" data-k="AC" id="btn-ac">AC</button>
+    <button class="fn" data-k="()" aria-label="parentheses"><span class="paren">( )</span></button>
+    <button class="fn" data-k="%">%</button>
+    <button class="op" data-k="÷" aria-label="divide"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="11" width="16" height="2" rx="1"/><circle cx="12" cy="6" r="1.7"/><circle cx="12" cy="18" r="1.7"/></svg></button>
+  </div>
+  <div class="row">
+    <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+    <button class="op" data-k="×" aria-label="multiply"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <div class="row">
+    <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+    <button class="op" data-k="−" aria-label="minus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
+  </div>
+  <div class="row">
+    <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+    <button class="op" data-k="+" aria-label="plus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M12 5v14"/></svg></button>
+  </div>
+  <div class="row">
+    <button data-k="0">0</button><button data-k=".">.</button>
+    <button data-k="⌫" aria-label="delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 5.5h10a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-10l-6-6.5 6-6.5z"/><path d="M11.5 9.5l5 5M16.5 9.5l-5 5"/></svg></button>
+    <button class="eq" data-k="=" aria-label="equals"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5.5 9.5h13M5.5 14.5h13"/></svg></button>
+  </div>
 </div>
 
 <script src="data.js"></script>
 <script src="engine.js"></script>
+<script src="settings.js"></script>
 <script>
 (function () {
   "use strict";
@@ -73,16 +108,20 @@
 
   // Everything this app records is published as an entry on a small shared "bus" so other apps
   // can pick it up: { source, bank, pattern, ts, fields }. Only the latest few are kept.
-  function publish(record) {
-    var bus;
-    try { bus = JSON.parse(localStorage.getItem(BUS_KEY)); } catch (e) { bus = null; }
+  function readBus() {
+    var bus; try { bus = JSON.parse(localStorage.getItem(BUS_KEY)); } catch (e) { bus = null; }
     if (!bus || bus.v !== 1 || !Array.isArray(bus.entries)) bus = { v: 1, seq: 0, entries: [] };
+    return bus;
+  }
+  function publish(record) {
+    var bus = readBus();
     bus.seq += 1;
     bus.entries.push({ id: "forcecalc-" + bus.seq, seq: bus.seq, source: "forcecalc", bank: record.bank,
       pattern: record.pattern, ts: record.ts, fields: record.fields });
     if (bus.entries.length > 30) bus.entries = bus.entries.slice(-30);
     try { localStorage.setItem(BUS_KEY, JSON.stringify(bus)); } catch (e) {}
   }
+  function clearBus() { try { localStorage.removeItem(BUS_KEY); } catch (e) {} }
 
   // ---------- notifications ----------
   function permission() { return ("Notification" in window) ? Notification.permission : "unsupported"; }
@@ -97,6 +136,9 @@
           icon: "icon-192.png", badge: "icon-192.png" });
       }).then(function () { return true; });
     }).catch(function () { return false; });
+  }
+  function requestPermission(cb) {
+    try { var r = Notification.requestPermission(function () { cb && cb(); }); if (r && r.then) r.then(function () { cb && cb(); }); } catch (e) {}
   }
 
   // ---------- timers: keep the screen awake while a notification is waiting; catch up if frozen ----------
@@ -127,6 +169,7 @@
     var i = waiting.indexOf(rec); if (i >= 0) waiting.splice(i, 1);
   }
 
+  var settingsOpen = false;
   var calc = FCEngine.createCalc({
     now: function () { return Date.now(); },
     vibrate: function (ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} },
@@ -135,26 +178,43 @@
     publish: publish,
     loadConfig: loadConfig, saveConfig: saveConfig,
     notifyPermission: permission,
-    requestNotifications: function () {
-      try { var r = Notification.requestPermission(function () { paint(); }); if (r && r.then) r.then(paint); } catch (e) {}
-    },
-    testNotification: function () { showNotification("♈ Aries  ·  March 21", "Test notification"); }
-  });
+    requestNotifications: function () { requestPermission(paint); },
+    testNotification: function () { showNotification("♈ Aries  ·  March 21", "Test notification"); },
+    openSettings: function () { openSettings(); }
+  }, { externalSettings: true });
+
+  function openSettings() {
+    if (settingsOpen) return;
+    settingsOpen = true;
+    FCSettings.open({
+      calc: calc, engine: FCEngine, readBus: readBus, clearBus: clearBus,
+      permission: permission, requestPermission: requestPermission,
+      testNotification: function () { return showNotification("♈ Aries  ·  March 21", "Test notification"); },
+      onClose: function () { settingsOpen = false; paint(); }
+    });
+  }
 
   // ---------- drawing ----------
   var canvasCtx = document.createElement("canvas").getContext("2d");
-  var SIZES = [57, 40, 32, 24, 18];
+  var SIZES = [64, 48, 38, 30, 24];
   function fitMain(text) {
-    var el = $("main"), avail = el.clientWidth - 32;
+    var el = $("main"), avail = $("display-area").clientWidth - 48;
     var fam = getComputedStyle(el).fontFamily;
     for (var i = 0; i < SIZES.length; i++) {
-      canvasCtx.font = "300 " + SIZES[i] + "px " + fam;
+      canvasCtx.font = "400 " + SIZES[i] + "px " + fam;
       if (canvasCtx.measureText(text).width <= avail || i === SIZES.length - 1) { el.style.fontSize = SIZES[i] + "px"; return; }
     }
   }
+  function fitHistory(text) {
+    var avail = $("display-area").clientWidth - 48;
+    canvasCtx.font = "400 28px " + getComputedStyle($("history")).fontFamily;
+    if (!text || canvasCtx.measureText(text).width <= avail) return text;
+    while (text.length > 1 && canvasCtx.measureText("\u2026" + text).width > avail) text = text.slice(1);
+    return "\u2026" + text;
+  }
   function paint() {
     var v = calc.view();
-    $("history").textContent = v.history;
+    $("history").textContent = fitHistory(v.history);
     $("main").textContent = v.display; fitMain(v.display);
     $("banner-force").style.display = v.banner === "force" ? "block" : "none";
     $("banner-settings").style.display = v.banner === "settings" ? "block" : "none";
@@ -201,8 +261,7 @@
 
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function () {});
   paint();
-  // expose for automated tests only
-  window.__calc = calc;
+  window.__calc = calc; // for automated tests only
 })();
 </script>
 </body>

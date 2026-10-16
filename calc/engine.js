@@ -56,7 +56,16 @@
     if (isNaN(d) || !isFinite(d)) return "Error";
     if (d === Math.floor(d) && Math.abs(d) < 1e15) return d === 0 ? "0" : String(d);
     var s = javaDoubleToString(d);
-    if (s.indexOf(".") >= 0 && s.indexOf("E") < 0) s = s.replace(/0+$/, "").replace(/\.$/, "");
+    if (s.indexOf("E") >= 0) {
+      // a normal calculator writes 0.000928 and 12345678.5, not Java's 9.28E-4 / 1.23456785E7
+      var a = Math.abs(d);
+      if (a >= 1e-9 && a < 1e21) {
+        s = a < 1 ? d.toFixed(Math.min(20, 12 - Math.floor(Math.log10(a)))) : String(d);
+        if (s.indexOf(".") >= 0) s = s.replace(/0+$/, "").replace(/\.$/, "");
+      }
+      return s;
+    }
+    if (s.indexOf(".") >= 0) s = s.replace(/0+$/, "").replace(/\.$/, "");
     return s;
   }
   function formatForHistory(v) {
@@ -130,6 +139,7 @@
   var BANKS = {
     birthday: {
       id: "birthday", name: "Birthday",
+      sample: { day: 21, month: 10 },
       fields: [
         { id: "day", label: "Day", type: "int", min: 1, max: 31 },
         { id: "month", label: "Month", type: "int", min: 1, max: 12 }
@@ -184,13 +194,14 @@
   function createCalc(env, opts) {
     opts = opts || {};
     var extraSettings = opts.extraSettings !== false;
+    var externalSettings = !!opts.externalSettings; // 5 taps open the page's settings screen instead
 
     var MODE = { NORMAL: 0, FORCE_ENTRY: 1, FACEDOWN: 2, INJECTED: 3, SETTINGS: 4 };
-    var currentVal = "0", previousVal = "", operator = null;
-    var justEvaluated = false, shouldResetDisplay = false;
+    var toks = [];              // the expression: {t:"n",v,inj} | {t:"o",v} | {t:"("} | {t:")"}
+    var justEvaluated = false, resultVal = "0", injectedNow = false;
     var mode = MODE.NORMAL;
     var forceEntryVal = "0", facedownTaps = 0, lastEquation = "";
-    var savedOpLog = [], opLog = [];
+    var lastLog = [];           // what the last "=" recorded (for tests / debugging)
     var displayTapCount = 0, lastDisplayTapTime = 0;
     var currentSettingIndex = 0, settingInputBuffer = "";
     var pending = []; // notifications waiting out their delay: {fire, handle}
@@ -216,13 +227,112 @@
       if (env.saveConfig) env.saveConfig(cfg);
     }
 
-    // ── display helpers ──
+    // ── expression helpers ──
+    function lastTok() { return toks.length ? toks[toks.length - 1] : null; }
+    function isNumTok(t) { return t && t.t === "n"; }
+    function openCount() { var n = 0; toks.forEach(function (t) { if (t.t === "(") n++; else if (t.t === ")") n--; }); return n; }
+    function showNum(v) { return v.charAt(0) === "-" ? "\u2212" + v.slice(1) : v; }
+    function showRes(d) { return showNum(formatResult(d)); }
+    function exprText(list, closeAll) {
+      var out = "", open = 0;
+      list.forEach(function (t) {
+        if (t.t === "n") out += showNum(t.v);
+        else if (t.t === "o") out += " " + t.v + " ";
+        else if (t.t === "(") { out += "("; open++; }
+        else { out += ")"; open--; }
+      });
+      if (closeAll) while (open-- > 0) out += ")";
+      return out;
+    }
+    function numValue(t) { var d = parseDoubleStrict(t.v); return d === null ? 0 : d; }
+
+    /** Parse tokens (parens already balanced) into a tree. Returns null if malformed. */
+    function parseTokens(list) {
+      var pos = 0, ok = true;
+      function peek() { return list[pos]; }
+      function factor() {
+        var t = peek();
+        if (!t) { ok = false; return null; }
+        if (t.t === "n") { pos++; return { k: "num", tok: t, val: numValue(t) }; }
+        if (t.t === "(") {
+          pos++; var e = expr();
+          if (peek() && peek().t === ")") pos++; else ok = false;
+          return e;
+        }
+        ok = false; return null;
+      }
+      function term() {
+        var l = factor();
+        while (ok && peek() && peek().t === "o" && (peek().v === "\u00D7" || peek().v === "\u00F7")) {
+          var op = list[pos++].v, r = factor(); l = { k: "bin", op: op, l: l, r: r };
+        }
+        return l;
+      }
+      function expr() {
+        var l = term();
+        while (ok && peek() && peek().t === "o" && (peek().v === "+" || peek().v === "\u2212")) {
+          var op = list[pos++].v, r = term(); l = { k: "bin", op: op, l: l, r: r };
+        }
+        return l;
+      }
+      var tree = expr();
+      if (!ok || pos !== list.length) return null;
+      return tree;
+    }
+    function evalTree(n) {
+      if (n.k === "num") return n.val;
+      var a = evalTree(n.l), b = evalTree(n.r);
+      switch (n.op) {
+        case "+": return a + b;
+        case "\u2212": return a - b;
+        case "\u00D7": return a * b;
+        default: return b === 0 ? NaN : a / b;
+      }
+    }
+    function tidy(d) {
+      if (!isFinite(d) || d === 0) return d;
+      var r = Math.round(d);
+      if (Math.abs(d - r) < 1e-9 * Math.max(1, Math.abs(d))) return r;   // 0.999999999999 -> 1
+      return parseFloat(d.toPrecision(12));
+    }
+
+    /** The expression as it would be evaluated: dangling operators dropped, brackets closed. */
+    function evalList() {
+      var l = toks.slice();
+      while (l.length) {
+        var t = l[l.length - 1];
+        if (t.t === "o" || t.t === "(" || (t.t === "n" && !/\d/.test(t.v))) l.pop(); else break;
+      }
+      var open = 0; l.forEach(function (t) { if (t.t === "(") open++; else if (t.t === ")") open--; });
+      while (open-- > 0) l.push({ t: ")" });
+      // brackets that ended up empty "()" make no sense: treat as malformed
+      return l;
+    }
+    function hasOperator(list) { return list.some(function (t) { return t.t === "o"; }); }
+
+    /** What gets recorded: every typed number after the first, with the operator right before it (brackets ignored). */
+    function buildOpLog(skipInjected) {
+      var log = [], prevOp = null, seen = 0;
+      toks.forEach(function (t) {
+        if (t.t === "o") prevOp = t.v;
+        else if (t.t === "n") {
+          if (seen > 0 && !(skipInjected && t.inj)) log.push(prevOp + "|" + formatForHistory(t.v));
+          seen++; prevOp = null;
+        }
+      });
+      return log;
+    }
+
+    // ── display ──
     function refreshDisplay() {
-      var d, h;
-      if (justEvaluated) { d = currentVal; h = lastEquation; }
-      else if (operator !== null) { d = currentVal; h = formatForHistory(previousVal) + " " + operator; }
-      else { d = currentVal; h = lastEquation; }
-      hist = h; disp = d;
+      if (justEvaluated) { hist = lastEquation; disp = showNum(resultVal); return; }
+      if (!toks.length) { hist = lastEquation; disp = "0"; return; }
+      var l = evalList(), tree = l.length ? parseTokens(l) : null, t = lastTok();
+      var complex = hasOperator(toks) || toks.some(function (x) { return x.t === "("; });
+      hist = complex ? exprText(toks, false) : "";
+      if (complex && tree && hasOperator(l)) disp = showRes(tidy(evalTree(tree)));
+      else if (isNumTok(t)) disp = showNum(t.v);
+      else disp = tree ? showRes(tidy(evalTree(tree))) : "0";
     }
 
     // ── input dispatcher ──
@@ -237,62 +347,80 @@
     }
 
     // ── NORMAL ──
+    function startFresh() { toks = []; justEvaluated = false; }
     function pressNormal(val) {
-      if (val === "AC") {
-        currentVal = "0"; previousVal = ""; operator = null; justEvaluated = false;
-        shouldResetDisplay = false; opLog = []; lastEquation = "";
+      var t = lastTok(), i;
+      if (val === "AC") { toks = []; justEvaluated = false; lastEquation = ""; resultVal = "0"; refreshDisplay(); return; }
+      if (val === "\u232B") {
+        if (justEvaluated) return;
+        if (!t) return;
+        if (t.t === "n") { t.v = t.v.slice(0, -1); if (t.v === "" || t.v === "-") toks.pop(); }
+        else toks.pop();
         refreshDisplay(); return;
       }
-      if (val === "+/-") {
-        if (currentVal !== "0") {
-          currentVal = currentVal.charAt(0) === "-" ? currentVal.substring(1) : "-" + currentVal;
-          refreshDisplay();
-        }
+      if (val === "+/-") {   // not on the keypad any more (the minus key does this), kept for the settings screen
+        if (justEvaluated) { toks = [{ t: "n", v: resultVal }]; justEvaluated = false; t = lastTok(); }
+        if (isNumTok(t) && /\d/.test(t.v)) { t.v = t.v.charAt(0) === "-" ? t.v.slice(1) : "-" + t.v; refreshDisplay(); }
         return;
       }
       if (val === "%") {
-        currentVal = formatResult(parseDouble(currentVal) / 100.0);
+        if (justEvaluated) { toks = [{ t: "n", v: resultVal }]; justEvaluated = false; t = lastTok(); }
+        if (isNumTok(t) && /\d/.test(t.v)) { t.v = formatResult(tidy(numValue(t) / 100.0)); refreshDisplay(); }
+        return;
+      }
+      if (val === "()") {
+        if (justEvaluated) { toks = [{ t: "n", v: resultVal }]; justEvaluated = false; t = lastTok(); }
+        var after = t && ((isNumTok(t) && /\d/.test(t.v)) || t.t === ")");
+        if (after && openCount() > 0) toks.push({ t: ")" });
+        else {
+          if (after) toks.push({ t: "o", v: "\u00D7" });
+          else if (isNumTok(t)) { t.v = "-1"; toks.push({ t: "o", v: "\u00D7" }); }
+          toks.push({ t: "(" });
+        }
         refreshDisplay(); return;
       }
       if (isOperator(val)) {
-        if (operator !== null && !shouldResetDisplay) {
-          var typedRhs = currentVal;
-          opLog.push(operator + "|" + typedRhs);
-          var result = calculate(previousVal, operator, currentVal);
-          previousVal = result; currentVal = result;
-        } else if (operator === null && previousVal !== "") {
-          // chain after evaluation — no log, prev already set
-        } else if (operator === null) {
-          previousVal = currentVal;
+        if (justEvaluated) { toks = [{ t: "n", v: resultVal }]; justEvaluated = false; t = lastTok(); }
+        if (val === "\u2212" && (!t || t.t === "o" || t.t === "(")) {
+          // a minus where a number should start is a sign: -5, 3 × -2, (-4
+          toks.push({ t: "n", v: "-" }); refreshDisplay(); return;
         }
-        if (justEvaluated) {
-          previousVal = currentVal; justEvaluated = false; opLog = [];
-        }
-        operator = val; shouldResetDisplay = true; justEvaluated = false;
+        if (!t) { toks.push({ t: "n", v: "0" }); }
+        else if (isNumTok(t) && !/\d/.test(t.v)) { return; }       // lone sign: wait for a number
+        else if (t.t === "(") { return; }
+        else if (t.t === "o") { toks.pop(); }                          // changed my mind: replace the operator
+        toks.push({ t: "o", v: val });
         refreshDisplay(); return;
       }
       if (val === "=") {
-        if (operator !== null) {
-          opLog.push(operator + "|" + currentVal);
-          var eq = formatForHistory(previousVal) + " " + operator + " " + currentVal + " =";
-          var res = calculate(previousVal, operator, currentVal);
-          lastEquation = eq; currentVal = res; previousVal = ""; operator = null;
-          justEvaluated = true; shouldResetDisplay = false;
-          savedOpLog = opLog.slice();
-          tryCapture();
-          opLog = [];
-          refreshDisplay();
-        }
+        if (justEvaluated) return;
+        var l = evalList(), tree = l.length ? parseTokens(l) : null;
+        if (!tree || !hasOperator(l)) return;          // nothing to calculate yet
+        var res = tidy(evalTree(tree));
+        var log = buildOpLog(injectedNow);
+        lastEquation = exprText(l, false) + " =";
+        resultVal = formatResult(res);
+        // the record uses the numbers as they were typed, in the order they were typed
+        lastLog = log;
+        justEvaluated = true;
+        var wasInjected = injectedNow; injectedNow = false;
+        toks = l.map(function (x) { return x; });     // keep the closed expression for display/tests
+        tryCapture(log);
+        refreshDisplay();
         return;
       }
       // digit or dot
-      if (justEvaluated) { currentVal = "0"; previousVal = ""; opLog = []; justEvaluated = false; }
-      if (shouldResetDisplay) { currentVal = "0"; shouldResetDisplay = false; }
+      if (justEvaluated) startFresh();
+      t = lastTok();
+      if (t && t.t === ")") { toks.push({ t: "o", v: "\u00D7" }); t = lastTok(); }
+      if (!isNumTok(t)) { toks.push({ t: "n", v: "0", fresh: true }); t = lastTok(); }
       if (val === ".") {
-        if (currentVal.indexOf(".") < 0) currentVal += ".";
-      } else {
-        currentVal = currentVal === "0" ? val : currentVal + val;
-      }
+        if (t.v.indexOf(".") < 0) { t.v = (t.v === "" || t.v === "-") ? t.v + "0." : (t.fresh ? "0." : t.v + "."); }
+      } else if (t.fresh || t.v === "0") {
+        t.v = val; 
+      } else if (t.v === "-0") { t.v = "-" + val; }
+      else t.v += val;
+      t.fresh = false;
       refreshDisplay();
     }
 
@@ -303,6 +431,11 @@
     }
     function pressForceEntry(val) {
       if (val === "AC" || val === "C") { forceEntryVal = "0"; disp = "0"; return; }
+      if (val === "\u232B") {
+        forceEntryVal = (forceEntryVal.length <= 1 || (forceEntryVal.length === 2 && forceEntryVal.charAt(0) === "-"))
+          ? "0" : forceEntryVal.slice(0, -1);
+        disp = forceEntryVal; return;
+      }
       if (val === "=") {
         var v = parseDoubleStrict(forceEntryVal);
         if (v !== null) { forceNumber = v; savePrefs(); }
@@ -312,7 +445,11 @@
         forceEntryVal = forceEntryVal.charAt(0) === "-" ? forceEntryVal.substring(1) : "-" + forceEntryVal;
         disp = forceEntryVal; return;
       }
-      if (val === "%" || isOperator(val)) return;
+      if (val === "\u2212") {   // the minus key flips the sign (there is no +/- key any more)
+        forceEntryVal = forceEntryVal.charAt(0) === "-" ? forceEntryVal.substring(1) : "-" + forceEntryVal;
+        disp = forceEntryVal; return;
+      }
+      if (val === "%" || val === "()" || isOperator(val)) return;
       if (val === ".") {
         if (forceEntryVal.indexOf(".") < 0) forceEntryVal += ".";
       } else if (forceEntryVal === "0" || forceEntryVal === "-0") {
@@ -433,40 +570,76 @@
       facedownTaps++;
       if (facedownTaps >= 3) injectForce();
     }
+    /** Find the value the last number must take so the whole expression equals `target`. */
+    function solveFor(tree, leaf, target) {
+      function has(n) { return n.k === "num" ? n.tok === leaf : (has(n.l) || has(n.r)); }
+      var node = tree, T = target;
+      while (node.k === "bin") {
+        var inLeft = has(node.l), other = evalTree(inLeft ? node.r : node.l);
+        if (isNaN(other)) return null;
+        switch (node.op) {
+          case "+": T = T - other; break;
+          case "\u2212": T = inLeft ? T + other : other - T; break;
+          case "\u00D7": if (other === 0) return null; T = T / other; break;
+          default:   // divide
+            if (inLeft) T = T * other;
+            else { if (T === 0) return null; T = other / T; }
+        }
+        node = inLeft ? node.l : node.r;
+      }
+      return T;
+    }
+    /** The sum is linear in the last number, so a couple of Newton steps remove any rounding drift. */
+    function refine(tree, leaf, x, target) {
+      var node = null;
+      (function find(n) { if (n.k === "num") { if (n.tok === leaf) node = n; } else { find(n.l); find(n.r); } })(tree);
+      if (!node) return x;
+      var keep = node.val;
+      function f(v) { node.val = v; return evalTree(tree); }
+      for (var i = 0; i < 6; i++) {
+        var err = f(x) - target;
+        if (tidy(f(x)) === tidy(target)) break;
+        var h = Math.abs(x) * 1e-7 + 1e-7, slope = (f(x + h) - f(x)) / h;
+        if (!isFinite(slope) || slope === 0) break;
+        var nx = x - err / slope;
+        if (!isFinite(nx) || !(Math.abs(f(nx) - target) < Math.abs(err))) break;
+        x = nx;
+      }
+      node.val = keep;
+      return x;
+    }
     function injectForce() {
       if (forceNumber === null) { mode = MODE.NORMAL; return; }
-      savedOpLog = opLog.slice();
-      var current = parseDouble(currentVal), target = forceNumber, injected;
-      if (operator !== null) {
-        switch (operator) {
-          case "+": injected = target - current; break;
-          case "−": injected = current - target; break;
-          case "×": injected = current === 0 ? 0 : target / current; break;
-          case "÷": injected = target === 0 ? 0 : current / target; break;
-          default: injected = target - current;
-        }
+      var target = forceNumber, t;
+      if (justEvaluated) { toks = []; justEvaluated = false; }
+      t = lastTok();
+      if (t && t.t === "n" && !/\d/.test(t.v)) { toks.pop(); t = lastTok(); }
+      var anyOp = toks.some(function (x) { return x.t === "o" || x.t === "("; });
+      var v;
+      if (!anyOp) {
+        // no sum yet: the original shows "0 + target"
+        v = { t: "n", v: "0", inj: true };
+        toks = [{ t: "n", v: "0" }, { t: "o", v: "+" }, v];
+      } else if (t && t.t === "n") {
+        v = t;
       } else {
-        injected = target; operator = "+"; previousVal = "0";
+        if (t && t.t === ")") toks.push({ t: "o", v: "\u00D7" });
+        v = { t: "n", v: "0" }; toks.push(v);
       }
-      currentVal = formatResult(injected);
+      var tree = parseTokens(evalList());
+      var x = tree ? solveFor(tree, v, target) : null;
+      if (x !== null) x = refine(tree, v, x, target);
+      v.v = formatResult(x === null ? 0 : x);
+      v.inj = true; injectedNow = true;
       mode = MODE.INJECTED;
       refreshDisplay();
     }
     function pressInjected(val) {
-      if (val === "=") {
-        var result = operator !== null ? calculate(previousVal, operator, currentVal) : currentVal;
-        lastEquation = formatForHistory(previousVal) + " " + (operator !== null ? operator : "") + " " + currentVal + " =";
-        currentVal = result; previousVal = ""; operator = null;
-        justEvaluated = true; shouldResetDisplay = false; mode = MODE.NORMAL;
-        opLog = savedOpLog.slice();
-        tryCapture();
-        opLog = [];
-        refreshDisplay();
-      }
+      if (val === "=") { mode = MODE.NORMAL; pressNormal("="); }
     }
 
     // ── Recording: pattern captures -> banks -> record + notification ──
-    function tryCapture() {
+    function tryCapture(opLog) {
       var pat = pattern();
       var byBank = {};
       pat.captures.forEach(function (c) { (byBank[c.bank] = byBank[c.bank] || []).push(c); });
@@ -481,7 +654,7 @@
           var parts = opLog[caps[i].step].split("|", 2);
           // split with limit 2 keeps only the first two pieces; the value never contains "|"
           if (parts.length < 2) return;
-          if (canon(parts[0]) !== canon(caps[i].op)) return;
+          if (caps[i].op !== "any" && canon(parts[0]) !== canon(caps[i].op)) return;
           var num = parseDoubleStrict(parts[1]);
           if (num === null) return;
           values[caps[i].field] = isNaN(num) ? 0 : (Math.round(num) | 0);
@@ -526,6 +699,10 @@
       displayTapCount++;
       if (mode === MODE.FACEDOWN || mode === MODE.INJECTED) {
         handleFacedownTap();
+      } else if (displayTapCount >= 5 && externalSettings) {
+        displayTapCount = 0;
+        if (mode !== MODE.NORMAL) { mode = MODE.NORMAL; banner = "none"; acLabel = "AC"; refreshDisplay(); }
+        if (env.openSettings) env.openSettings();
       } else if (displayTapCount >= 5) {
         displayTapCount = 0;
         if (mode === MODE.FORCE_ENTRY) enterSettingsMode();
@@ -546,10 +723,20 @@
       displayTap: displayTap,
       displayLongPress: displayLongPress,
       flushOnLeave: flushOnLeave,
+      getConfig: function () { cfg.forceNumber = forceNumber; return JSON.parse(JSON.stringify(cfg)); },
+      setConfig: function (c) {
+        if (!c || c.v !== 1 || !c.patterns || !c.patterns.length) return false;
+        cfg = JSON.parse(JSON.stringify(c));
+        if (!cfg.patterns.some(function (p) { return p.id === cfg.activePattern; })) cfg.activePattern = cfg.patterns[0].id;
+        forceNumber = (typeof cfg.forceNumber === "number") ? cfg.forceNumber : null;
+        savePrefs(); return true;
+      },
+      setForceNumber: function (n) { forceNumber = (typeof n === "number" && isFinite(n)) ? n : null; savePrefs(); },
+      startKeypadForce: function () { if (mode === MODE.NORMAL) enterForceEntryMode(); },
       view: function () { return { display: disp, history: hist, banner: banner, ac: acLabel }; },
       state: function () {
-        return { mode: mode, currentVal: currentVal, previousVal: previousVal, operator: operator,
-          opLog: opLog.slice(), savedOpLog: savedOpLog.slice(), forceNumber: forceNumber,
+        return { mode: mode, expr: exprText(toks, false), result: resultVal, justEvaluated: justEvaluated,
+          opLog: lastLog.slice(), forceNumber: forceNumber,
           pending: pending.length, config: JSON.parse(JSON.stringify(cfg)) };
       }
     };
@@ -559,6 +746,6 @@
     createCalc: createCalc, defaultConfig: defaultConfig, BANKS: BANKS,
     formatResult: formatResult, calculate: calculate, parseDouble: parseDouble,
     getStarSign: getStarSign, getCelebrity: getCelebrity, monthName: monthName,
-    fillTemplate: fillTemplate
+    fillTemplate: fillTemplate, parseDoubleStrict: parseDoubleStrict
   };
 });
