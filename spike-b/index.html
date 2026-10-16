@@ -175,7 +175,15 @@
   $("clear").onclick = function () { try { localStorage.removeItem(LOG_KEY); } catch (e) {} paintLog(); };
 
   setInterval(function () { paintCountdown(); if (document.visibilityState === "visible") paintShared(); }, 1000);
-  paintEnv(); paintShared(); paintLog(); log("opened");
+  function permReport(why) {
+    var np = ("Notification" in window) ? Notification.permission : "unsupported";
+    var line = why + ": Notification.permission=" + np;
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: "notifications" }).then(function (r) { log(line + ", permissions.query=" + r.state); }, function () { log(line + ", permissions.query unavailable"); });
+    } else log(line);
+  }
+  document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") permReport("visible"); });
+  paintEnv(); paintShared(); paintLog(); log("opened"); permReport("open");
 })();
 </script>
 </body>

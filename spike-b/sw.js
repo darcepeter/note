@@ -1,6 +1,6 @@
 // Spike B service worker: caches its own shell (for the offline test), and can run a
 // delayed notification itself so we can compare it against a plain page timer.
-var CACHE = "spike-B-v1";
+var CACHE = "spike-B-v2";
 var ASSETS = ["./", "./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", function (event) {
