@@ -44,3 +44,9 @@ v3 — NORMAL MATHS ALL THE TIME
  - Force: the last number is replaced by whatever makes the WHOLE expression equal the force number
    (works inside brackets, through ×, ÷, − etc.). Numbers typed before it are still recorded.
  - The old step-by-step engine is kept in archive/engine_stepbystep.js if it is ever wanted back.
+
+v4
+ - Display like the Pixel calculator: big line = the equation while typing (the result after =), small line = live answer.
+ - History (top left), ⋮ menu (Clear history works) and the expand arrow (sin cos tan ln log √ π ^ ! Deg Inv) all work.
+ - Trick settings: the title bar is a drop-down that jumps to any section.
+ - Equation builder: the whole sum is shown at once, e.g. Day × Month + any + force = 1985. The FIRST number can now be recorded too.
