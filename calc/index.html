@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Calculator</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<style>
+  :root {
+    --calc-bg:#000000; --display-primary:#E8E0D5; --display-secondary:rgba(232,224,213,.6);
+    --btn-num:#1F1B18; --btn-fn:#2D2925; --btn-op:#2D2925; --btn-eq:#F5E6D3; --btn-eq-text:#1A1208;
+    --divider:rgba(255,255,255,.2); --force-banner:#CC3300; --settings-banner:#004499;
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { margin:0; height:100%; background:var(--calc-bg); overscroll-behavior:none; }
+  body { display:flex; flex-direction:column; color:var(--display-primary);
+    font-family:Roboto, "Helvetica Neue", system-ui, sans-serif; font-weight:300;
+    -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; touch-action:manipulation;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+  #display-area { flex:38 1 0; position:relative; min-height:0; }
+  .banner { position:absolute; top:0; left:0; right:0; text-align:center; font-size:12px; font-weight:700;
+    color:#fff; padding:4px 0; display:none; }
+  #banner-force { background:var(--force-banner); } #banner-settings { background:var(--settings-banner); }
+  #history { position:absolute; right:0; left:0; bottom:40px; padding:0 16px; text-align:right;
+    color:var(--display-secondary); font-size:24px; white-space:nowrap; overflow:hidden; line-height:1.2; min-height:29px; }
+  #main { position:absolute; right:0; left:0; bottom:8px; padding:0 16px; text-align:right; font-size:57px;
+    white-space:nowrap; overflow:hidden; line-height:1.2; color:var(--display-primary); }
+  /* an invisible, larger touch target so the gestures work anywhere on the display area */
+  #hit { position:absolute; inset:0; }
+  #divider { height:1px; background:var(--divider); flex:none; }
+  #keys { flex:62 1 0; display:flex; flex-direction:column; min-height:0; }
+  .row { flex:1 1 0; display:flex; padding:3px; min-height:0; }
+  button { flex:1 1 0; margin:3px; border:0; border-radius:999px; font:inherit; font-weight:300; font-size:22px;
+    color:var(--display-primary); background:var(--btn-num); min-width:0; padding:0; cursor:pointer; position:relative; overflow:hidden; }
+  button:active { filter:brightness(1.6); }
+  button.fn { background:var(--btn-fn); font-size:20px; } button.op { background:var(--btn-op); }
+  button.eq { background:var(--btn-eq); color:var(--btn-eq-text); } button.eq:active { filter:brightness(.85); }
+  button.zero { flex:2 1 0; text-align:left; padding-left:28px; }
+</style>
+</head>
+<body>
+<div id="display-area">
+  <div class="banner" id="banner-force">SET FORCE NUMBER</div>
+  <div class="banner" id="banner-settings">SETTINGS</div>
+  <div id="history"></div>
+  <div id="main">0</div>
+  <div id="hit"></div>
+</div>
+<div id="divider"></div>
+<div id="keys">
+  <div class="row"><button class="fn" data-k="AC" id="btn-ac">AC</button><button class="fn" data-k="+/-">+/-</button><button class="fn" data-k="%">%</button><button class="op" data-k="÷">÷</button></div>
+  <div class="row"><button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button><button class="op" data-k="×">×</button></div>
+  <div class="row"><button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button><button class="op" data-k="−">−</button></div>
+  <div class="row"><button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button><button class="op" data-k="+">+</button></div>
+  <div class="row"><button class="zero" data-k="0">0</button><button data-k=".">.</button><button class="eq" data-k="=">=</button></div>
+</div>
+
+<script src="data.js"></script>
+<script src="engine.js"></script>
+<script>
+(function () {
+  "use strict";
+  var CONFIG_KEY = "fc_calc_v1";        // this app's own settings
+  var BUS_KEY = "fc_bus_v1";            // shared with other apps on this site (Notary reads this)
+  var $ = function (id) { return document.getElementById(id); };
+
+  // ---------- storage ----------
+  function loadConfig() { try { return JSON.parse(localStorage.getItem(CONFIG_KEY)); } catch (e) { return null; } }
+  function saveConfig(c) { try { localStorage.setItem(CONFIG_KEY, JSON.stringify(c)); } catch (e) {} }
+
+  // Everything this app records is published as an entry on a small shared "bus" so other apps
+  // can pick it up: { source, bank, pattern, ts, fields }. Only the latest few are kept.
+  function publish(record) {
+    var bus;
+    try { bus = JSON.parse(localStorage.getItem(BUS_KEY)); } catch (e) { bus = null; }
+    if (!bus || bus.v !== 1 || !Array.isArray(bus.entries)) bus = { v: 1, seq: 0, entries: [] };
+    bus.seq += 1;
+    bus.entries.push({ id: "forcecalc-" + bus.seq, seq: bus.seq, source: "forcecalc", bank: record.bank,
+      pattern: record.pattern, ts: record.ts, fields: record.fields });
+    if (bus.entries.length > 30) bus.entries = bus.entries.slice(-30);
+    try { localStorage.setItem(BUS_KEY, JSON.stringify(bus)); } catch (e) {}
+  }
+
+  // ---------- notifications ----------
+  function permission() { return ("Notification" in window) ? Notification.permission : "unsupported"; }
+  function showNotification(title, text) {
+    if (permission() !== "granted" || !navigator.serviceWorker) return Promise.resolve(false);
+    return navigator.serviceWorker.getRegistration().then(function (reg) {
+      if (!reg) return false;
+      // like the original (fixed notification id) a new reveal replaces the previous one
+      return reg.getNotifications().then(function (list) {
+        list.forEach(function (n) { if (n.tag && n.tag.indexOf("forcecalc-") === 0) n.close(); });
+        return reg.showNotification(title, { body: text, silent: true, tag: "forcecalc-" + Date.now(),
+          icon: "icon-192.png", badge: "icon-192.png" });
+      }).then(function () { return true; });
+    }).catch(function () { return false; });
+  }
+
+  // ---------- timers: keep the screen awake while a notification is waiting; catch up if frozen ----------
+  var waiting = [];   // {fn, due, id}
+  var wakeLock = null;
+  function acquireLock() {
+    try {
+      if (!navigator.wakeLock || wakeLock) return;
+      navigator.wakeLock.request("screen").then(function (l) {
+        wakeLock = l; l.addEventListener("release", function () { if (wakeLock === l) wakeLock = null; });
+      }, function () {});
+    } catch (e) {}
+  }
+  function releaseLockIfIdle() {
+    if (waiting.length) return;
+    if (wakeLock) { try { wakeLock.release(); } catch (e) {} wakeLock = null; }
+  }
+  function schedule(fn, ms) {
+    var rec = { due: Date.now() + ms, id: null };
+    rec.fn = function () { var i = waiting.indexOf(rec); if (i >= 0) waiting.splice(i, 1); fn(); releaseLockIfIdle(); };
+    rec.id = setTimeout(rec.fn, ms);
+    waiting.push(rec); acquireLock();
+    return rec;
+  }
+  function cancel(rec) {
+    if (!rec) return;
+    clearTimeout(rec.id);
+    var i = waiting.indexOf(rec); if (i >= 0) waiting.splice(i, 1);
+  }
+
+  var calc = FCEngine.createCalc({
+    now: function () { return Date.now(); },
+    vibrate: function (ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} },
+    schedule: schedule, cancel: cancel,
+    notify: function (p) { showNotification(p.title, p.text); },
+    publish: publish,
+    loadConfig: loadConfig, saveConfig: saveConfig,
+    notifyPermission: permission,
+    requestNotifications: function () {
+      try { var r = Notification.requestPermission(function () { paint(); }); if (r && r.then) r.then(paint); } catch (e) {}
+    },
+    testNotification: function () { showNotification("♈ Aries  ·  March 21", "Test notification"); }
+  });
+
+  // ---------- drawing ----------
+  var canvasCtx = document.createElement("canvas").getContext("2d");
+  var SIZES = [57, 40, 32, 24, 18];
+  function fitMain(text) {
+    var el = $("main"), avail = el.clientWidth - 32;
+    var fam = getComputedStyle(el).fontFamily;
+    for (var i = 0; i < SIZES.length; i++) {
+      canvasCtx.font = "300 " + SIZES[i] + "px " + fam;
+      if (canvasCtx.measureText(text).width <= avail || i === SIZES.length - 1) { el.style.fontSize = SIZES[i] + "px"; return; }
+    }
+  }
+  function paint() {
+    var v = calc.view();
+    $("history").textContent = v.history;
+    $("main").textContent = v.display; fitMain(v.display);
+    $("banner-force").style.display = v.banner === "force" ? "block" : "none";
+    $("banner-settings").style.display = v.banner === "settings" ? "block" : "none";
+    $("btn-ac").textContent = v.ac;
+  }
+
+  // ---------- buttons ----------
+  Array.prototype.forEach.call(document.querySelectorAll("button[data-k]"), function (b) {
+    b.addEventListener("click", function () { calc.handleInput(b.getAttribute("data-k")); paint(); });
+  });
+
+  // ---------- display gestures: 5 quick taps, and a long-press (swallowing the click it would produce) ----------
+  var hit = $("hit"), lpTimer = null, lpFired = false, lpX = 0, lpY = 0;
+  hit.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+  hit.addEventListener("pointerdown", function (e) {
+    lpFired = false; lpX = e.clientX; lpY = e.clientY;
+    clearTimeout(lpTimer);
+    lpTimer = setTimeout(function () { lpFired = calc.displayLongPress(); paint(); }, 500);
+  });
+  function endPress() { clearTimeout(lpTimer); }
+  hit.addEventListener("pointerup", endPress);
+  hit.addEventListener("pointercancel", function () { endPress(); lpFired = false; });
+  hit.addEventListener("pointermove", function (e) {
+    if (Math.abs(e.clientX - lpX) > 12 || Math.abs(e.clientY - lpY) > 12) endPress();
+  });
+  hit.addEventListener("click", function () {
+    if (lpFired) { lpFired = false; return; }
+    calc.displayTap(); paint();
+  });
+
+  // ---------- leaving / returning ----------
+  function leave() { calc.flushOnLeave(); releaseLockIfIdle(); }
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "hidden") leave();
+    else {
+      var now = Date.now();
+      waiting.filter(function (r) { return r.due <= now; }).forEach(function (r) { clearTimeout(r.id); r.fn(); });
+      if (waiting.length) acquireLock();
+      paint();
+    }
+  });
+  window.addEventListener("pagehide", leave);
+  window.addEventListener("resize", paint);
+
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function () {});
+  paint();
+  // expose for automated tests only
+  window.__calc = calc;
+})();
+</script>
+</body>
+</html>
