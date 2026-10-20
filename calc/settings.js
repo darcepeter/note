@@ -60,8 +60,7 @@
     "#fcs .switch input:checked+i{background:#FFEBD5;} #fcs .switch input:checked+i:after{left:23px;background:#6D5433;}"
   ].join("");
 
-  var OPS = [["+", "+"], ["−", "−"], ["×", "×"], ["÷", "÷"], ["any", "any operator"]];
-  var FIELD_NOTES = { day: "day of the month", month: "month number" };
+  var OPS = [["+", "+"], ["−", "−"], ["×", "×"], ["÷", "÷"]];
 
   function el(tag, props, kids) {
     var e = document.createElement(tag);
@@ -99,10 +98,6 @@
       var seen = [], out = [];
       p.captures.forEach(function (c) { if (seen.indexOf(c.bank) < 0 && BANKS[c.bank]) { seen.push(c.bank); out.push(c.bank); } });
       return out;
-    }
-    function capFor(p, bankId, fieldId) {
-      for (var i = 0; i < p.captures.length; i++) if (p.captures[i].bank === bankId && p.captures[i].field === fieldId) return p.captures[i];
-      return null;
     }
     function sampleFields(bankId) {
       var b = BANKS[bankId], f = {};
@@ -193,7 +188,7 @@
       var forceTxt = cfg.forceNumber === null ? "force number" : FE.formatResult(cfg.forceNumber);
       var big = el("div", { class: "eqbig" });
       slots.forEach(function (sl, i) {
-        if (i > 0) big.appendChild(el("span", { class: "op", text: sl.op === "any" ? "+" : sl.op }));
+        if (i > 0) big.appendChild(el("span", { class: "op", text: sl.op }));
         var rec = sl.role !== ANY, label = "any";
         if (rec) { var rr = roles.filter(function (r) { return r[0] === sl.role; })[0]; label = rr ? rr[1].split(" · ")[1] : "?"; }
         big.appendChild(el("span", { class: "tk" + (rec ? " rec" : ""), text: label }));
@@ -211,7 +206,7 @@
         var v;
         if (sl.role === ANY) v = free[fi++ % free.length];
         else { var q = sl.role.split("."); v = sample[q[0]] ? sample[q[0]][q[1]] : 0; }
-        if (i > 0) parts.push(sl.op === "any" ? "+" : sl.op);
+        if (i > 0) parts.push(sl.op);
         parts.push(String(v));
       });
       var fop = p.forceOp || "+", rest = evalPlain(parts.join(" ").replace(/×/g, "*").replace(/÷/g, "/").replace(/−/g, "-"));
@@ -222,10 +217,18 @@
       } else ex += "(forced) = " + forceTxt;
       card.appendChild(el("div", { class: "hint", style: "margin:0 0 10px", text: "Example: " + ex }));
 
+      // one-tap layouts
+      function layout(list) { p.slots = list; syncCaptures(p); rerender(); }
+      card.appendChild(el("div", { class: "hint", style: "margin:0 0 2px", text: "Quick layouts:" }));
+      card.appendChild(el("button", { class: "btn", text: "Day × Month first", onclick: function () {
+        layout([{ role: "birthday.day", op: "+" }, { role: "birthday.month", op: "×" }, { role: ANY, op: "+" }]); } }));
+      card.appendChild(el("button", { class: "btn", text: "Original (2 numbers, then Day + Month ×)", onclick: function () {
+        layout([{ role: ANY, op: "+" }, { role: ANY, op: "+" }, { role: "birthday.day", op: "+" }, { role: "birthday.month", op: "×" }]); } }));
+
       // the rows
       slots.forEach(function (sl, i) {
         var opSel = el("select", { disabled: i === 0, onchange: function (e) { sl.op = e.target.value; syncCaptures(p); rerender(); } },
-          OPS.slice(0, 4).map(function (o) { return el("option", { value: o[0], text: o[1], selected: sl.op === o[0] }); }));
+          OPS.map(function (o) { return el("option", { value: o[0], text: o[1], selected: sl.op === o[0] }); }));
         if (i === 0) opSel.appendChild(el("option", { text: "—", selected: true }));
         var roleSel = el("select", { onchange: function (e) { sl.role = e.target.value; syncCaptures(p); rerender(); } },
           roles.map(function (r) { return el("option", { value: r[0], text: r[1], selected: sl.role === r[0] }); }));
@@ -234,7 +237,7 @@
         card.appendChild(el("div", { class: "slot" }, [el("div", { class: "n", text: String(i + 1) }), opSel, roleSel, rm]));
       });
       var fopSel = el("select", { onchange: function (e) { p.forceOp = e.target.value; commit(); rerender(); } },
-        OPS.slice(0, 4).map(function (o) { return el("option", { value: o[0], text: o[1], selected: fop === o[0] }); }));
+        OPS.map(function (o) { return el("option", { value: o[0], text: o[1], selected: fop === o[0] }); }));
       card.appendChild(el("div", { class: "slot force" }, [el("div", { class: "n", text: "★" }), fopSel,
         el("div", { class: "rolebox", text: "Forced number (solved for you)" }), el("div")]));
       card.appendChild(el("button", { class: "btn", text: "+ Add a number", disabled: slots.length >= 8, onclick: function () {
@@ -251,6 +254,16 @@
       if (dupes) card.appendChild(el("div", { class: "warn", text: "Two rows record the same thing — only one can win. Change one of them." }));
       missing.forEach(function (n) { card.appendChild(el("div", { class: "warn", text: n + " needs all of its fields recorded, or nothing is saved." })); });
       card.appendChild(el("div", { class: "hint", text: "The operator column is what has to be pressed before that number for it to count. The “forced number” operator is only for this preview — whatever is pressed, the last number is solved so the total lands on the force number." }));
+      // what happened the last time "=" was pressed: the quickest way to see why something was or wasn't recorded
+      var le = api.readLastEval ? api.readLastEval() : null;
+      var dbg = el("div", { class: "preview" }, [el("div", { class: "s", text: "Last equation worked out" })]);
+      if (!le) dbg.appendChild(el("div", { class: "s", text: "Nothing yet — press = on the calculator, then come back here." }));
+      else {
+        dbg.appendChild(el("div", { class: "eq", text: le.expr + " = " + le.result }));
+        dbg.appendChild(el("div", { class: "s", style: "margin-top:6px", text: "Numbers as typed (operator before each): " + (le.numbers || []).map(function (x, i) { return (i + 1) + ") " + x.trim(); }).join("   ") }));
+        (le.notes || []).forEach(function (n) { dbg.appendChild(el("div", { class: /^Recorded/.test(n) ? "ok" : "warn", style: "font-size:13px;margin-top:4px", text: n })); });
+      }
+      card.appendChild(dbg);
       var used2 = banksIn(p);
       used2.forEach(function (id) {
         var n = p.notify && p.notify.bank === id ? p.notify : null;
@@ -264,7 +277,7 @@
       var used = banksIn(p);
       var card = el("div", { class: "card" }, [el("h2", { text: "Notification" })]);
       function toggle(checked, onchange) { return el("label", { class: "switch" }, [el("input", { type: "checkbox", checked: checked, onchange: onchange }), el("i")]); }
-      card.appendChild(el("div", { class: "row" }, [el("div", {}, [el("b", { text: "Send a silent notification" }),
+      card.appendChild(el("div", { class: "row" }, [el("div", {}, [el("b", { text: "Send a notification" }),
         el("div", { class: "hint", style: "margin:0", text: "Tells you what was recorded, on this phone (and a paired watch)." })]),
         toggle(n.enabled, function (e) { n.enabled = e.target.checked; commit(); rerender(); })]));
       if (!n.enabled) return card;
@@ -313,6 +326,15 @@
       else status.textContent = "Notifications haven’t been allowed yet.";
       card.appendChild(status);
       if (perm === "default") card.appendChild(el("button", { class: "btn main", text: "Allow notifications", onclick: function () { api.requestPermission(rerender); } }));
+      var log = api.readNotifLog ? api.readNotifLog() : [];
+      if (log.length) {
+        var dl = el("dl");
+        log.slice(-4).reverse().forEach(function (x) {
+          dl.appendChild(el("dt", { text: new Date(x.ts).toLocaleTimeString() }));
+          dl.appendChild(el("dd", { class: x.ok ? "ok" : "warn", text: (x.ok ? "sent via " : "FAILED: ") + x.how }));
+        });
+        card.appendChild(el("div", { class: "hint", style: "margin-top:10px", text: "Recent sends:" })); card.appendChild(dl);
+      }
       card.appendChild(el("button", { class: "btn", text: "Send a test now", onclick: function () {
         api.testNotification().then(function (ok) { status.className = ok ? "hint ok" : "warn"; status.textContent = ok ? "Test sent — check your notifications." : "Couldn’t send — notifications aren’t allowed yet."; }); } }));
       return card;

@@ -1,8 +1,8 @@
 /*
- * ForceCalc engine — a line-by-line port of MainActivity.java's calculator, force and
- * birthday logic, with the hard-coded "day on step 1, month on step 2" rule generalised into
- * a pattern (list of captures) and banks (named groups of fields) so patterns can be edited
- * later without touching the calculator itself.
+ * Calculator engine: a normal expression calculator (brackets, precedence, scientific keys) with
+ * the hidden force and recording logic built in. A "pattern" (list of captures) says which typed
+ * numbers are recorded into which "bank" (named group of fields); the forced number is solved
+ * through the whole expression.
  *
  * The engine knows nothing about the page: everything it needs from the outside (time, timers,
  * storage, notifications, vibration, publishing) comes in through `env`.
@@ -26,12 +26,6 @@
     if (/NaN$/.test(t)) return NaN;
     if (/Infinity$/.test(t)) return t.charAt(0) === "-" ? -Infinity : Infinity;
     return parseFloat(t.replace(/[fFdD]$/, ""));
-  }
-  /** The class's own parseDouble(): empty or unparseable text counts as 0. */
-  function parseDouble(s) {
-    if (s == null || s === "") return 0;
-    var v = parseDoubleStrict(s);
-    return v === null ? 0 : v;
   }
   /** Java's Double.toString for a finite, non-integer-path value. */
   function javaDoubleToString(d) {
@@ -73,17 +67,6 @@
     return d === null ? v : formatResult(d);
   }
   function isOperator(v) { return v === "+" || v === "−" || v === "×" || v === "÷"; }
-  function calculate(a, op, b) {
-    var da = parseDouble(a), db = parseDouble(b), r;
-    switch (op) {
-      case "+": r = da + db; break;
-      case "−": r = da - db; break;
-      case "×": r = da * db; break;
-      case "÷": r = db === 0 ? 0 : da / db; break;
-      default: r = db;
-    }
-    return formatResult(r);
-  }
   function canon(op) {
     switch (op) {
       case "+": return "+";
@@ -91,15 +74,6 @@
       case "*": case "×": return "*";
       case "/": case "÷": return "/";
       default: return op;
-    }
-  }
-  function normaliseOp(s) {
-    switch (s) {
-      case "+": return "+";
-      case "-": case "−": return "−";
-      case "*": case "×": return "×";
-      case "/": case "÷": return "÷";
-      default: return s;
     }
   }
 
@@ -193,10 +167,8 @@
   // ─────────────────────────────────────────────────────────────────────────
   function createCalc(env, opts) {
     opts = opts || {};
-    var extraSettings = opts.extraSettings !== false;
-    var externalSettings = !!opts.externalSettings; // 5 taps open the page's settings screen instead
 
-    var MODE = { NORMAL: 0, FORCE_ENTRY: 1, FACEDOWN: 2, INJECTED: 3, SETTINGS: 4 };
+    var MODE = { NORMAL: 0, FORCE_ENTRY: 1, FACEDOWN: 2, INJECTED: 3 };
     var toks = [];              // the expression: {t:"n",v,inj} | {t:"o",v} | {t:"("} | {t:")"}
     var justEvaluated = false, resultVal = "0", injectedNow = false;
     var mode = MODE.NORMAL;
@@ -382,12 +354,17 @@
 
     // ── input dispatcher ──
     function handleInput(val) {
+      expireFacedown();
+      // AC always gets you out of the hidden modes, so the calculator can never feel stuck
+      if (val === "AC" && (mode === MODE.FACEDOWN || mode === MODE.INJECTED)) {
+        mode = MODE.NORMAL; facedownTaps = 0; injectedNow = false; toks = []; justEvaluated = false; lastEquation = ""; resultVal = "0";
+        refreshDisplay(); return;
+      }
       switch (mode) {
         case MODE.NORMAL: pressNormal(val); break;
         case MODE.FORCE_ENTRY: pressForceEntry(val); break;
         case MODE.FACEDOWN: handleFacedownTap(); break;
         case MODE.INJECTED: pressInjected(val); break;
-        case MODE.SETTINGS: pressSettings(val); break;
       }
     }
 
@@ -410,11 +387,6 @@
           if (t.t === "(" && lastTok() && lastTok().t === "f") toks.pop();   // "sin(" goes as one
         }
         refreshDisplay(); return;
-      }
-      if (val === "+/-") {   // not on the keypad (the minus key does this), kept for the old settings screen
-        t = fromResult();
-        if (isNumTok(t) && hasDigit(t) && !t.c) { t.v = t.v.charAt(0) === "-" ? t.v.slice(1) : "-" + t.v; refreshDisplay(); }
-        return;
       }
       if (val === "%") {
         t = fromResult();
@@ -482,8 +454,8 @@
         var exprC = exprText(l, false, true);
         injectedNow = false;
         toks = l.slice();
-        tryCapture(nums);
-        if (env.evaluated) env.evaluated({ expr: exprC, result: showNum(resultVal) });
+        var notes = tryCapture(nums);
+        if (env.evaluated) env.evaluated({ expr: exprC, result: showNum(resultVal), numbers: nums.map(function (x) { return (x.op || "") + " " + x.v; }), notes: notes, pattern: pattern().name });
         refreshDisplay();
         return;
       }
@@ -519,10 +491,6 @@
         if (v !== null) { forceNumber = v; savePrefs(); }
         exitForceEntryMode(); return;
       }
-      if (val === "+/-") {
-        forceEntryVal = forceEntryVal.charAt(0) === "-" ? forceEntryVal.substring(1) : "-" + forceEntryVal;
-        disp = forceEntryVal; return;
-      }
       if (val === "\u2212") {   // the minus key flips the sign (there is no +/- key any more)
         forceEntryVal = forceEntryVal.charAt(0) === "-" ? forceEntryVal.substring(1) : "-" + forceEntryVal;
         disp = forceEntryVal; return;
@@ -542,109 +510,19 @@
       mode = MODE.NORMAL; banner = "none"; acLabel = "AC"; refreshDisplay();
     }
 
-    // ── SETTINGS ──
-    var SETTING_NAMES = ["NOTIF DELAY (SEC)", "DAY OP INDEX", "DAY OP TYPE", "MONTH OP INDEX", "MONTH OP TYPE"];
-    if (extraSettings) SETTING_NAMES = SETTING_NAMES.concat(["SEND IF I LEAVE (1/0)", "NOTIFICATIONS (=)", "TEST NOTIF (=)"]);
-    var SETTINGS_COUNT = SETTING_NAMES.length;
-
-    function isTextSetting(i) { return i === 2 || i === 4 || i === 6 || i === 7; }
-    function enterSettingsMode() {
-      mode = MODE.SETTINGS; currentSettingIndex = 0; settingInputBuffer = ""; banner = "settings";
-      showCurrentSetting();
-    }
-    function getCurrentSettingValue(i) {
-      var n = pattern().notify || {};
-      switch (i) {
-        case 0: return String(Math.floor((n.delaySec || 15) * 1000 / 1000));
-        case 1: return String((capOf("day") || { step: 1 }).step);
-        case 2: return (capOf("day") || { op: "+" }).op;
-        case 3: return String((capOf("month") || { step: 2 }).step);
-        case 4: return (capOf("month") || { op: "×" }).op;
-        case 5: return n.sendOnLeave === false ? "0" : "1";
-        case 6: { var p = env.notifyPermission ? env.notifyPermission() : "unsupported";
-          return p === "granted" ? "ALLOWED" : p === "denied" ? "BLOCKED" : p === "default" ? "ASK" : "N/A"; }
-        case 7: return "TAP =";
-        default: return "";
-      }
-    }
-    function showCurrentSetting() {
-      var cur = getCurrentSettingValue(currentSettingIndex);
-      hist = SETTING_NAMES[currentSettingIndex];
-      disp = settingInputBuffer === "" ? cur : settingInputBuffer;
-    }
-    function pressSettings(val) {
-      if (val === "AC") { exitSettingsMode(); return; }
-      if (isOperator(val)) {
-        if (currentSettingIndex === 2 || currentSettingIndex === 4) {
-          settingInputBuffer = normaliseOp(val); showCurrentSetting();
-        }
-        return;
-      }
-      if (val === "=") {
-        applyCurrentSetting();
-        settingInputBuffer = "";
-        if (currentSettingIndex < SETTINGS_COUNT - 1) { currentSettingIndex++; showCurrentSetting(); }
-        else { savePrefs(); exitSettingsMode(); }
-        return;
-      }
-      if (val === "+/-") {
-        if (!isTextSetting(currentSettingIndex)) {
-          if (settingInputBuffer.charAt(0) === "-") settingInputBuffer = settingInputBuffer.substring(1);
-          else if (settingInputBuffer !== "") settingInputBuffer = "-" + settingInputBuffer;
-          showCurrentSetting();
-        }
-        return;
-      }
-      if (val === "%") {
-        settingInputBuffer = "";
-        if (currentSettingIndex < SETTINGS_COUNT - 1) { currentSettingIndex++; showCurrentSetting(); }
-        else exitSettingsMode();
-        return;
-      }
-      if (!isTextSetting(currentSettingIndex)) {
-        if (val === "." || !/^[0-9]$/.test(val)) return;
-        settingInputBuffer = (settingInputBuffer === "0" || settingInputBuffer === "") ? val : settingInputBuffer + val;
-        showCurrentSetting();
-      }
-    }
-    function javaParseInt(s) {
-      return /^[+-]?\d+$/.test(s) ? parseInt(s, 10) : null;
-    }
-    function applyCurrentSetting() {
-      var buf = settingInputBuffer.trim();
-      var n = pattern().notify;
-      // the two "action" settings act on `=` even with nothing typed
-      if (extraSettings && currentSettingIndex === 6) { if (env.requestNotifications) env.requestNotifications(); return; }
-      if (extraSettings && currentSettingIndex === 7) { if (env.testNotification) env.testNotification(); return; }
-      if (buf === "") return;
-      var i, dayCap = capOf("day"), monthCap = capOf("month");
-      switch (currentSettingIndex) {
-        case 0:
-          i = javaParseInt(buf);
-          if (i !== null && i >= 1 && i <= 3600) n.delaySec = i;
-          break;
-        case 1:
-          i = javaParseInt(buf);
-          if (i !== null && i >= 0 && i <= 9 && dayCap) { dayCap.step = i; delete dayCap.pos; delete pattern().slots; }
-          break;
-        case 2: if (dayCap) dayCap.op = normaliseOp(buf); break;
-        case 3:
-          i = javaParseInt(buf);
-          if (i !== null && i >= 0 && i <= 9 && monthCap) { monthCap.step = i; delete monthCap.pos; delete pattern().slots; }
-          break;
-        case 4: if (monthCap) monthCap.op = normaliseOp(buf); break;
-        case 5: if (buf === "0") n.sendOnLeave = false; else if (buf === "1") n.sendOnLeave = true; break;
-      }
-    }
-    function exitSettingsMode() {
-      mode = MODE.NORMAL; banner = "none"; acLabel = "AC"; refreshDisplay();
-    }
-
     // ── FACEDOWN / injection ──
+    var facedownStamp = 0;
     function enterFacedownMode() {
-      mode = MODE.FACEDOWN; facedownTaps = 0; env.vibrate && env.vibrate(80);
+      mode = MODE.FACEDOWN; facedownTaps = 0; facedownStamp = env.now ? env.now() : Date.now(); env.vibrate && env.vibrate(80);
+    }
+    /** An accidental long-press must not lock the keypad: after a few seconds with no taps, the armed state lapses. */
+    function expireFacedown() {
+      if (mode !== MODE.FACEDOWN) return;
+      var now = env.now ? env.now() : Date.now();
+      if (now - facedownStamp > 8000) { mode = MODE.NORMAL; facedownTaps = 0; }
     }
     function handleFacedownTap() {
+      facedownStamp = env.now ? env.now() : Date.now();
       env.vibrate && env.vibrate(30);
       facedownTaps++;
       if (facedownTaps >= 3) injectForce();
@@ -747,27 +625,35 @@
 
     // ── Recording: pattern captures -> banks -> record + notification ──
     function tryCapture(nums) {
-      var pat = pattern();
+      var pat = pattern(), notes = [];
       var byBank = {};
       pat.captures.forEach(function (c) { (byBank[c.bank] = byBank[c.bank] || []).push(c); });
+      if (!pat.captures.length) notes.push("This pattern records nothing (no numbers are set to be recorded).");
       Object.keys(byBank).forEach(function (bankId) {
         var bank = BANKS[bankId];
         if (!bank) return;
         var caps = byBank[bankId], i;
         function posOf(c) { return typeof c.pos === "number" ? c.pos : c.step + 1; }
         // every capture needs its number to exist (all-or-nothing, as in the original)
-        for (i = 0; i < caps.length; i++) if (nums.length <= posOf(caps[i])) return;
+        for (i = 0; i < caps.length; i++) if (nums.length <= posOf(caps[i])) {
+          notes.push(bank.name + ": needs number " + (posOf(caps[i]) + 1) + " (" + caps[i].field + "), but only " + nums.length + " number" + (nums.length === 1 ? " was" : "s were") + " typed.");
+          return;
+        }
         var values = {};
         for (i = 0; i < caps.length; i++) {
           var entry = nums[posOf(caps[i])];
-          if (posOf(caps[i]) > 0 && caps[i].op !== "any" && canon(entry.op || "") !== canon(caps[i].op)) return;
+          if (posOf(caps[i]) > 0 && caps[i].op !== "any" && canon(entry.op || "") !== canon(caps[i].op)) {
+            notes.push(bank.name + " " + caps[i].field + ": number " + (posOf(caps[i]) + 1) + " (" + entry.v + ") was typed after “" + (entry.op || "?") + "” but the pattern wants “" + caps[i].op + "”.");
+            return;
+          }
           var num = parseDoubleStrict(entry.v);
-          if (num === null) return;
+          if (num === null) { notes.push(bank.name + " " + caps[i].field + ": “" + entry.v + "” isn’t a number."); return; }
           values[caps[i].field] = isNaN(num) ? 0 : (Math.round(num) | 0);
         }
         for (i = 0; i < bank.fields.length; i++) {
           var f = bank.fields[i], v = values[f.id];
-          if (v === undefined || v < f.min || v > f.max) return;
+          if (v === undefined) { notes.push(bank.name + ": " + f.label + " isn’t set to be recorded."); return; }
+          if (v < f.min || v > f.max) { notes.push(bank.name + " " + f.label + ": " + v + " is outside " + f.min + "–" + f.max + "."); return; }
         }
         var fields = {};
         Object.keys(values).forEach(function (k) { fields[k] = values[k]; });
@@ -775,9 +661,11 @@
         Object.keys(derived).forEach(function (k) { fields[k] = derived[k]; });
         var record = { bank: bankId, pattern: pat.id, ts: env.now ? env.now() : Date.now(), fields: fields };
         if (env.publish) env.publish(record);
+        notes.push("Recorded " + bank.name + ": " + (fields.date || JSON.stringify(values)) + ".");
         var n = pat.notify;
         if (n && n.enabled && n.bank === bankId) scheduleNotification(record, n);
       });
+      return notes;
     }
     function scheduleNotification(record, n) {
       var payload = { title: fillTemplate(n.title, record.fields), text: fillTemplate(n.text, record.fields) };
@@ -799,21 +687,17 @@
 
     // ── gestures (the page feeds raw taps in; the logic is the original's) ──
     function displayTap() {
+      expireFacedown();
       var now = env.now ? env.now() : Date.now();
       if (now - lastDisplayTapTime > 1500) displayTapCount = 0;
       lastDisplayTapTime = now;
       displayTapCount++;
       if (mode === MODE.FACEDOWN || mode === MODE.INJECTED) {
         handleFacedownTap();
-      } else if (displayTapCount >= 5 && externalSettings) {
+      } else if (displayTapCount >= 5) {
         displayTapCount = 0;
         if (mode !== MODE.NORMAL) { mode = MODE.NORMAL; banner = "none"; acLabel = "AC"; refreshDisplay(); }
         if (env.openSettings) env.openSettings();
-      } else if (displayTapCount >= 5) {
-        displayTapCount = 0;
-        if (mode === MODE.FORCE_ENTRY) enterSettingsMode();
-        else if (mode === MODE.SETTINGS) exitSettingsMode();
-        else enterForceEntryMode();
       }
     }
     /** Returns true if the long-press did something (the page then swallows the click). */
@@ -855,7 +739,7 @@
 
   return {
     createCalc: createCalc, defaultConfig: defaultConfig, BANKS: BANKS,
-    formatResult: formatResult, calculate: calculate, parseDouble: parseDouble,
+    formatResult: formatResult,
     getStarSign: getStarSign, getCelebrity: getCelebrity, monthName: monthName,
     fillTemplate: fillTemplate, parseDoubleStrict: parseDoubleStrict
   };

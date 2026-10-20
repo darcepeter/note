@@ -13,7 +13,7 @@
     --bg:#100E0D; --text:#EEE3DF; --text-dim:#B2A9A6;
     --key-num:#2A2522; --key-op:#413A37; --key-ac:#52443D; --key-ac-text:#E1CCC2; --op-glyph:#C8BDB8;
     --key-eq:#FFEBD5; --key-eq-glyph:#6D5433;
-    --banner-force:#CC3300; --banner-settings:#004499;
+    --banner-force:#CC3300;
   }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html, body { margin:0; height:100%; background:var(--bg); overscroll-behavior:none; }
@@ -34,7 +34,7 @@
   #history { color:var(--key-eq); font-size:40px; line-height:52px; min-height:52px; max-width:100%; white-space:nowrap; overflow:hidden; margin-top:6px; }
   .banner { position:absolute; top:0; left:0; right:0; text-align:center; font-size:12px; font-weight:700;
     color:#fff; padding:4px 0; display:none; }
-  #banner-force { background:var(--banner-force); } #banner-settings { background:var(--banner-settings); }
+  #banner-force { background:var(--banner-force); }
   #hit { position:absolute; inset:0; }
 
   #expander { flex:none; height:44px; padding:0 26px; display:flex; align-items:center; color:var(--text-dim); cursor:pointer; }
@@ -87,7 +87,6 @@
 <div id="histpanel"><div id="hp-top"></div><div id="hp-bot"><div class="grab"></div><div class="lbl">Current expression</div><div class="m" id="hp-m"></div><div class="s" id="hp-s"></div></div></div>
 <div id="display-area">
   <div class="banner" id="banner-force">SET FORCE NUMBER</div>
-  <div class="banner" id="banner-settings">SETTINGS</div>
   <div id="main">0</div>
   <div id="history"></div>
   <div id="hit"></div>
@@ -155,17 +154,29 @@
 
   // ---------- notifications ----------
   function permission() { return ("Notification" in window) ? Notification.permission : "unsupported"; }
+  var NLOG = "fc_notif_log";
+  function readNotifLog() { try { var l = JSON.parse(localStorage.getItem(NLOG)); return Array.isArray(l) ? l : []; } catch (e) { return []; } }
+  function logNotif(ok, how) {
+    var l = readNotifLog(); l.push({ ts: Date.now(), ok: ok, how: how });
+    try { localStorage.setItem(NLOG, JSON.stringify(l.slice(-6))); } catch (e) {}
+  }
+  // A normal (audible / vibrating) notification. Tries the service worker first, then the page itself, and records what happened.
   function showNotification(title, text) {
-    if (permission() !== "granted" || !navigator.serviceWorker) return Promise.resolve(false);
-    return navigator.serviceWorker.getRegistration().then(function (reg) {
-      if (!reg) return false;
-      // like the original (fixed notification id) a new reveal replaces the previous one
-      return reg.getNotifications().then(function (list) {
-        list.forEach(function (n) { if (n.tag && n.tag.indexOf("forcecalc-") === 0) n.close(); });
-        return reg.showNotification(title, { body: text, silent: true, tag: "forcecalc-" + Date.now(),
-          icon: "icon-192.png", badge: "icon-192.png" });
-      }).then(function () { return true; });
-    }).catch(function () { return false; });
+    var perm = permission();
+    if (perm !== "granted") { logNotif(false, "not allowed (" + perm + ")"); return Promise.resolve(false); }
+    var opts = { body: text, tag: "forcecalc-" + Date.now(), icon: "icon-192.png", badge: "icon-192.png", vibrate: [150, 80, 150] };
+    var viaWorker = !navigator.serviceWorker ? Promise.reject(new Error("no service worker")) :
+      Promise.race([navigator.serviceWorker.ready, new Promise(function (_, rej) { setTimeout(function () { rej(new Error("service worker not ready")); }, 3000); })])
+      .then(function (reg) {
+        return reg.getNotifications().catch(function () { return []; }).then(function (list) {
+          list.forEach(function (n) { if (n.tag && n.tag.indexOf("forcecalc-") === 0) n.close(); });
+          return reg.showNotification(title, opts);
+        });
+      });
+    return viaWorker.then(function () { logNotif(true, "service worker"); return true; }).catch(function (err) {
+      try { new Notification(title, opts); logNotif(true, "page (worker failed: " + (err && err.message || err) + ")"); return true; }
+      catch (e2) { logNotif(false, String(err && err.message || err) + " / " + String(e2 && e2.message || e2)); return false; }
+    });
   }
   function requestPermission(cb) {
     try { var r = Notification.requestPermission(function () { cb && cb(); }); if (r && r.then) r.then(function () { cb && cb(); }); } catch (e) {}
@@ -206,7 +217,10 @@
 
   var settingsOpen = false;
   var calc = FCEngine.createCalc({
-    evaluated: function (r) { var h = loadHist(); h.push({ e: r.expr, r: r.result }); saveHist(h); },
+    evaluated: function (r) {
+      var h = loadHist(); h.push({ e: r.expr, r: r.result }); saveHist(h);
+      try { localStorage.setItem("fc_last_eval", JSON.stringify({ ts: Date.now(), expr: r.expr, result: r.result, numbers: r.numbers, notes: r.notes, pattern: r.pattern })); } catch (e) {}
+    },
     now: function () { return Date.now(); },
     vibrate: function (ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} },
     schedule: schedule, cancel: cancel,
@@ -217,13 +231,13 @@
     requestNotifications: function () { requestPermission(paint); },
     testNotification: function () { showNotification("♈ Aries  ·  March 21", "Test notification"); },
     openSettings: function () { openSettings(); }
-  }, { externalSettings: true });
+  });
 
   function openSettings() {
     if (settingsOpen) return;
     settingsOpen = true;
     FCSettings.open({
-      calc: calc, engine: FCEngine, readBus: readBus, clearBus: clearBus,
+      calc: calc, engine: FCEngine, readBus: readBus, clearBus: clearBus, readNotifLog: readNotifLog, readLastEval: function () { try { return JSON.parse(localStorage.getItem("fc_last_eval")); } catch (e) { return null; } },
       permission: permission, requestPermission: requestPermission,
       testNotification: function () { return showNotification("♈ Aries  ·  March 21", "Test notification"); },
       onClose: function () { settingsOpen = false; paint(); }
@@ -252,7 +266,6 @@
     $("main").className = v.evaluated ? "res" : "";
     $("history").textContent = v.sub;
     $("banner-force").style.display = v.banner === "force" ? "block" : "none";
-    $("banner-settings").style.display = v.banner === "settings" ? "block" : "none";
     $("btn-ac").textContent = v.ac;
     var i = v.inv ? 1 : 0;
     $("k-sin").textContent = SCI_LABELS.sin[i]; $("k-cos").textContent = SCI_LABELS.cos[i]; $("k-tan").textContent = SCI_LABELS.tan[i];
