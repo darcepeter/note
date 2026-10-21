@@ -24,4 +24,11 @@ Hidden parts
     the shared "bus" (localStorage fc_bus_v1) for Notary, and optionally to a notification.
   - Settings > Equation shows the last sum worked out and why it was / wasn't recorded.
 
+Banks: Trick settings > Banks & lookup tables. Make your own (PIN, zip, house number, a number->text lookup table...).
+  Each recording is written to the shared bus with a description of its fields, so Notary lists new banks automatically.
+
+Built-in banks (v11): Birthday, Full birthday (day+month+year, ~34 reveals), Zip code (~42,500 zips), Area code (445),
+  and card stacks (Mnemonica, Si Stebbins, New deck order) where any position 1-52 gives that card plus the cards either side.
+  "+ My own stack" in Banks lets you paste your own stack. Big tables live in data_zip.js and data_areacodes.js.
+
 Storage keys: fc_calc_v1 (settings), fc_bus_v1 (shared), fc_hist_v1 (history), fc_last_eval, fc_notif_log

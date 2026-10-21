@@ -55,6 +55,12 @@
     "#fcs .eqbig{background:#0B0A09;border:1px solid #2A2522;border-radius:14px;padding:12px;margin:2px 0 8px;line-height:2.1;font-size:15px;}",
     "#fcs .tk{display:inline-block;padding:2px 9px;border-radius:999px;background:#2A2522;margin:0 2px;font-weight:600;} #fcs .tk.rec{background:#17375E;color:#CFE3FF;} #fcs .tk.force{background:#FFEBD5;color:#4A3720;}",
     "#fcs .op{display:inline-block;margin:0 4px;color:#B2A9A6;font-weight:600;}",
+    "#fcs .bk{background:#241F1D;border-radius:14px;padding:10px;margin:8px 0;} #fcs .bk .top{display:flex;align-items:center;gap:8px;} #fcs .bk .top b{flex:1;min-width:0;}",
+    "#fcs .tag{font-size:11.5px;background:#2A2522;border-radius:999px;padding:3px 9px;color:#FFEBD5;} #fcs .bk .btn{margin:0;padding:7px 12px;font-size:13px;}",
+    "#fcs .frow{display:grid;grid-template-columns:1fr 62px 62px 52px 34px;gap:6px;margin:5px 0;align-items:center;} #fcs .frow input{padding:8px 8px;}",
+    "#fcs .fhead{display:grid;grid-template-columns:1fr 62px 62px 52px 34px;gap:6px;font-size:11px;color:#B2A9A6;}",
+    "#fcs .lrow{display:flex;gap:6px;margin:4px 0;align-items:center;} #fcs .lrow input{padding:8px;flex:1;min-width:0;} #fcs .lrow .k{flex:0 0 84px;}",
+    "#fcs .tbl{max-height:320px;overflow-y:auto;margin-top:6px;border-radius:12px;background:#1B1816;padding:6px;}",
     "#fcs .switch{position:relative;width:48px;height:28px;flex:none;} #fcs .switch input{opacity:0;width:100%;height:100%;position:absolute;margin:0;z-index:1;}",
     "#fcs .switch i{position:absolute;inset:0;border-radius:999px;background:#413A37;transition:.15s;} #fcs .switch i:after{content:'';position:absolute;left:3px;top:3px;width:22px;height:22px;border-radius:50%;background:#B2A9A6;transition:.15s;}",
     "#fcs .switch input:checked+i{background:#FFEBD5;} #fcs .switch input:checked+i:after{left:23px;background:#6D5433;}"
@@ -78,8 +84,10 @@
   }
 
   function open(api) {
-    var FE = api.engine, BANKS = FE.BANKS;
+    var FE = api.engine, BANKS = {};
     var cfg = api.calc.getConfig();
+    if (!Array.isArray(cfg.banks)) cfg.banks = [];
+    BANKS = FE.resolveBanks(cfg);
     var lastTemplateInput = null;
     var overlay = el("div", { id: "fcs" });
     var style = el("style", { text: STYLE });
@@ -102,7 +110,7 @@
     function sampleFields(bankId) {
       var b = BANKS[bankId], f = {};
       Object.keys(b.sample).forEach(function (k) { f[k] = b.sample[k]; });
-      var d = b.derive(b.sample); Object.keys(d).forEach(function (k) { f[k] = d[k]; });
+      var d = b.derive(b.sample) || {}; Object.keys(d).forEach(function (k) { f[k] = d[k]; });
       return f;
     }
 
@@ -145,6 +153,182 @@
         var n = JSON.parse(JSON.stringify(FE.defaultConfig().patterns[0])); n.id = uid(); n.name = "Pattern " + (cfg.patterns.length + 1);
         cfg.patterns.push(n); cfg.activePattern = n.id; commit(); rerender(); } }));
       return card;
+    }
+
+    // ---- banks & lookup tables ----
+    var editingBank = null, tableOpen = false, openBuiltin = null;
+    function slug(s, taken) {
+      var base = String(s || "field").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "field", id = base, n = 2;
+      while (taken.indexOf(id) >= 0) id = base + "_" + (n++);
+      return id;
+    }
+    function bankUses(id) { return cfg.patterns.filter(function (p) { return p.captures.some(function (c) { return c.bank === id; }); }); }
+    var TAGS = ["number", "pin code", "zip code", "house number", "phone number", "age", "year", "lucky number", "card", "area code", "birthday"];
+    function newBank(kind) {
+      var id = "b" + Date.now().toString(36), b;
+      if (kind === "pin") b = { id: id, name: "PIN code", tag: "pin code", fields: [{ id: "pin", label: "PIN", min: 0, max: 9999, pad: 4 }] };
+      else if (kind === "stack") b = { id: id, name: "My stack", tag: "card", kind: "stack", fields: [{ id: "position", label: "Position", min: 1, max: 52, pad: 0 }],
+        lookup: { keyField: "position", columns: [{ id: "card", label: "Card" }], rows: [], onMissing: "skip" } };
+      else if (kind === "house") b = { id: id, name: "House number", tag: "house number", fields: [{ id: "number", label: "Number", min: 1, max: null, pad: 0 }] };
+      else if (kind === "table") b = { id: id, name: "Lookup table", tag: "number", fields: [{ id: "number", label: "Number", min: 1, max: null, pad: 0 }],
+        lookup: { keyField: "number", columns: [{ id: "word", label: "Word" }], rows: [], onMissing: "blank" } };
+      else b = { id: id, name: "New bank", tag: "number", fields: [{ id: "number", label: "Number", min: null, max: null, pad: 0 }] };
+      cfg.banks.push(b); editingBank = id; tableOpen = !!b.lookup; commit(); rerender();
+    }
+    function numOrNull(v) { v = String(v).trim(); if (v === "") return null; var n = Number(v); return isNaN(n) ? null : n; }
+    function banksCard() {
+      var card = el("div", { class: "card" }, [el("h2", { text: "Banks & lookup tables" }),
+        el("div", { class: "hint", style: "margin:0 0 6px", text: "A bank is a kind of information the calculator can record from the sum (a birthday, a PIN, a zip code…). Give it a tag so other apps know what it is, and optionally a lookup table that turns each recorded number into extra text (a word, a city, a name). Anything you make here shows up in the equation builder, and Notary finds it on its own." })]);
+      // built-in
+      Object.keys(BANKS).forEach(function (id) {
+        var b = BANKS[id]; if (!b.builtin) return;
+        var open = openBuiltin === id, box = el("div", { class: "bk" });
+        var missing = b.dataset && !(root.FCData && typeof root.FCData[b.dataset] === "string");
+        box.appendChild(el("div", { class: "top" }, [el("b", { text: b.name }), el("span", { class: "tag", text: b.tag }), el("span", { class: "hint", style: "margin:0", text: "built in" }),
+          el("button", { class: "btn", text: open ? "Close" : "Details", onclick: function () { openBuiltin = open ? null : id; rerender(); } })]));
+        if (missing) box.appendChild(el("div", { class: "warn", text: "The data file for this bank didn’t load, so it can’t record yet. Reload the calculator while online." }));
+        if (open) {
+          if (b.about) box.appendChild(el("div", { class: "hint", text: b.about }));
+          box.appendChild(el("div", { class: "hint", style: "margin-top:8px", text: "Numbers it takes: " + b.fields.map(function (f) { return f.label + (f.min != null && f.max != null ? " (" + f.min + "–" + f.max + ")" : ""); }).join(", ") }));
+          box.appendChild(el("div", { class: "hint", style: "margin-top:6px", text: "Information it gives back (" + b.derivedDefs.length + "):" }));
+          box.appendChild(el("div", { class: "chips" }, b.derivedDefs.map(function (x) { return el("span", { class: "chip", text: x[1] }); })));
+        }
+        card.appendChild(box);
+      });
+      cfg.banks.forEach(function (d) {
+        var open = editingBank === d.id;
+        var box = el("div", { class: "bk" });
+        box.appendChild(el("div", { class: "top" }, [el("b", { text: d.name }), el("span", { class: "tag", text: d.tag || "number" }),
+          el("button", { class: "btn", text: open ? "Close" : "Edit", onclick: function () { editingBank = open ? null : d.id; rerender(); } })]));
+        if (open) box.appendChild(bankEditor(d));
+        card.appendChild(box);
+      });
+      card.appendChild(el("div", { class: "hint", style: "margin-top:10px", text: "New bank:" }));
+      [["stack", "My own stack"], ["pin", "PIN code"], ["house", "House number"], ["table", "Lookup table"], ["blank", "Blank"]].forEach(function (x) {
+        card.appendChild(el("button", { class: "btn", text: "+ " + x[1], onclick: function () { newBank(x[0]); } }));
+      });
+      return card;
+    }
+    function bankEditor(d) {
+      var wrap = el("div", { style: "margin-top:8px" });
+      wrap.appendChild(el("label", { class: "f", text: "Name" }));
+      wrap.appendChild(el("input", { type: "text", value: d.name, onchange: function (e) { d.name = e.target.value.trim() || "Untitled bank"; commit(); rerender(); } }));
+      wrap.appendChild(el("label", { class: "f", text: "Tag (what kind of information this is — Notary can tell them apart)" }));
+      var dl = el("datalist", { id: "fcs-tags" }, TAGS.map(function (x) { return el("option", { value: x }); }));
+      wrap.appendChild(el("input", { type: "text", list: "fcs-tags", value: d.tag || "", placeholder: "pin code, zip code, …", onchange: function (e) { d.tag = e.target.value.trim(); commit(); } }));
+      wrap.appendChild(dl);
+      // fields
+      wrap.appendChild(el("label", { class: "f", text: "Fields recorded (each one takes a number from the sum)" }));
+      wrap.appendChild(el("div", { class: "fhead" }, [el("span", { text: "Name" }), el("span", { text: "Min" }), el("span", { text: "Max" }), el("span", { text: "Digits" }), el("span")]));
+      d.fields.forEach(function (f, i) {
+        wrap.appendChild(el("div", { class: "frow" }, [
+          el("input", { type: "text", value: f.label, onchange: function (e) { f.label = e.target.value.trim() || f.id; commit(); rerender(); } }),
+          el("input", { type: "number", inputmode: "numeric", value: f.min == null ? "" : String(f.min), placeholder: "—", onchange: function (e) { f.min = numOrNull(e.target.value); commit(); } }),
+          el("input", { type: "number", inputmode: "numeric", value: f.max == null ? "" : String(f.max), placeholder: "—", onchange: function (e) { f.max = numOrNull(e.target.value); commit(); } }),
+          el("input", { type: "number", inputmode: "numeric", min: "0", max: "12", value: f.pad ? String(f.pad) : "", placeholder: "—", onchange: function (e) { f.pad = Math.max(0, Math.min(12, parseInt(e.target.value, 10) || 0)); commit(); rerender(); } }),
+          el("button", { class: "x", style: "width:34px;height:34px;padding:0;background:#2A2522;color:#EEE3DF;border:0;font-size:18px", text: "×", disabled: d.fields.length < 2, onclick: function () {
+            if (bankUses(d.id).length && !confirm("This bank is used in an equation. Removing a field stops that recording until you set it up again. Remove it?")) return;
+            d.fields.splice(i, 1); if (d.lookup && d.lookup.keyField === f.id) d.lookup.keyField = d.fields[0].id;
+            cfg.patterns.forEach(function (p) { p.captures = p.captures.filter(function (c) { return !(c.bank === d.id && c.field === f.id); }); (p.slots || []).forEach(function (sl) { if (sl.role === d.id + "." + f.id) sl.role = "free"; }); });
+            commit(); rerender(); } })]));
+      });
+      wrap.appendChild(el("div", { class: "hint", text: "“Digits” pads with zeros (a PIN of 427 becomes 0427). Leave Min/Max empty for no limit." }));
+      wrap.appendChild(el("button", { class: "btn", style: "margin-top:6px", text: "+ Add a field", disabled: d.fields.length >= 6, onclick: function () {
+        var ids = d.fields.map(function (x) { return x.id; }); d.fields.push({ id: slug("value", ids), label: "Value " + (d.fields.length + 1), min: null, max: null, pad: 0 }); commit(); rerender(); } }));
+      // lookup table
+      var lk = d.lookup;
+      wrap.appendChild(el("div", { class: "row", style: "margin-top:12px" }, [el("div", {}, [el("b", { text: "Lookup table" }),
+        el("div", { class: "hint", style: "margin:0", text: "Turns each recorded number into extra text." })]),
+        el("label", { class: "switch" }, [el("input", { type: "checkbox", checked: !!lk, onchange: function (e) {
+          if (e.target.checked) d.lookup = d.lookup || { keyField: d.fields[0].id, columns: [{ id: "word", label: "Word" }], rows: [], onMissing: "blank" };
+          else if (!(d.lookup.rows || []).length || confirm("Turn off the lookup table? Its rows will be deleted.")) { delete d.lookup; }
+          else { e.target.checked = true; return; }
+          commit(); rerender(); } }), el("i")])]));
+      if (lk) wrap.appendChild(lookupEditor(d, lk));
+      wrap.appendChild(el("button", { class: "btn danger", style: "margin-top:12px", text: "Delete this bank", onclick: function () {
+        var uses = bankUses(d.id);
+        if (!confirm("Delete “" + d.name + "”?" + (uses.length ? " It is used in " + uses.length + " pattern(s); those recordings will stop." : ""))) return;
+        cfg.banks = cfg.banks.filter(function (x) { return x !== d; });
+        cfg.patterns.forEach(function (p) {
+          p.captures = p.captures.filter(function (c) { return c.bank !== d.id; });
+          (p.slots || []).forEach(function (sl) { if (sl.role.indexOf(d.id + ".") === 0) sl.role = "free"; });
+          if (p.notify && p.notify.bank === d.id) p.notify.bank = null;
+        });
+        editingBank = null; commit(); rerender(); } }));
+      return wrap;
+    }
+    function lookupEditor(d, lk) {
+      var w = el("div");
+      if (d.fields.length > 1) {
+        w.appendChild(el("label", { class: "f", text: "Look up by this field" }));
+        w.appendChild(el("select", { onchange: function (e) { lk.keyField = e.target.value; commit(); } },
+          d.fields.map(function (f) { return el("option", { value: f.id, text: f.label, selected: lk.keyField === f.id }); })));
+      }
+      w.appendChild(el("label", { class: "f", text: "Columns (the extra text you get back)" }));
+      lk.columns.forEach(function (c, i) {
+        w.appendChild(el("div", { class: "lrow" }, [el("input", { type: "text", value: c.label, onchange: function (e) { c.label = e.target.value.trim() || c.id; commit(); rerender(); } }),
+          el("button", { class: "x", style: "flex:none;width:34px;height:34px;padding:0;background:#2A2522;color:#EEE3DF;border:0;font-size:18px", text: "×", disabled: lk.columns.length < 2, onclick: function () {
+            lk.columns.splice(i, 1); lk.rows.forEach(function (r) { delete r.values[c.id]; }); commit(); rerender(); } })]));
+      });
+      w.appendChild(el("button", { class: "btn", text: "+ Add a column", disabled: lk.columns.length >= 6, onclick: function () {
+        var ids = lk.columns.map(function (x) { return x.id; }); lk.columns.push({ id: slug("column", ids), label: "Column " + (lk.columns.length + 1) }); commit(); rerender(); } }));
+      w.appendChild(el("label", { class: "f", text: "If a recorded number isn’t in the table" }));
+      w.appendChild(el("select", { onchange: function (e) { lk.onMissing = e.target.value; commit(); } }, [
+        el("option", { value: "blank", text: "Record it anyway (extra text left empty)", selected: lk.onMissing !== "skip" }),
+        el("option", { value: "skip", text: "Don’t record it at all", selected: lk.onMissing === "skip" })]));
+      // rows
+      var keyLabel = (d.fields.filter(function (f) { return f.id === lk.keyField; })[0] || d.fields[0]).label;
+      w.appendChild(el("div", { class: "hint", style: "margin-top:10px", text: lk.rows.length + " row" + (lk.rows.length === 1 ? "" : "s") + " · first column is the " + keyLabel + " that is looked up" }));
+      var tbl = el("div", { class: "tbl" });
+      var head = el("div", { class: "lrow", style: "color:#B2A9A6;font-size:11px" }, [el("span", { class: "k", text: keyLabel })]);
+      lk.columns.forEach(function (c) { head.appendChild(el("span", { style: "flex:1", text: c.label })); });
+      head.appendChild(el("span", { style: "flex:none;width:34px" }));
+      tbl.appendChild(head);
+      lk.rows.forEach(function (r, ri) {
+        var row = el("div", { class: "lrow" }, [el("input", { class: "k", type: "text", inputmode: "numeric", value: String(r.key), onchange: function (e) { r.key = e.target.value.trim(); commit(); } })]);
+        lk.columns.forEach(function (c) { row.appendChild(el("input", { type: "text", value: (r.values && r.values[c.id]) || "", onchange: function (e) { r.values = r.values || {}; r.values[c.id] = e.target.value; commit(); } })); });
+        row.appendChild(el("button", { style: "flex:none;width:34px;height:34px;padding:0;background:#2A2522;color:#EEE3DF;border:0;font-size:16px", text: "×", onclick: function () { lk.rows.splice(ri, 1); commit(); rerender(); } }));
+        tbl.appendChild(row);
+      });
+      w.appendChild(tbl);
+      w.appendChild(el("button", { class: "btn", text: "+ Add a row", onclick: function () { lk.rows.push({ key: "", values: {} }); commit(); rerender(); } }));
+      // paste a whole stack in order
+      if (d.kind === "stack") {
+        var sta = el("textarea", { placeholder: "Paste your whole stack in order, top card first. Any separators work:\n4C 2H 7D 3C 4H 6D AS … (or Four of Clubs, one per line)", style: "min-height:90px;margin-top:8px" });
+        var smsg = el("div", { class: "hint" });
+        w.appendChild(el("b", { text: "Paste a whole stack", style: "display:block;margin-top:12px" }));
+        w.appendChild(sta);
+        w.appendChild(el("button", { class: "btn main", text: "Replace stack with this", onclick: function () {
+          var parts = sta.value.split(/\r?\n|,|;|\s+(?=[2-9AJQK1])/).map(function (x) { return x.trim(); }).filter(Boolean);
+          if (parts.length === 1) parts = parts[0].split(/\s+/);
+          var cards = [], badAt = -1;
+          parts.forEach(function (x, i) { var c = FE.parseCard(x); if (!c && badAt < 0) badAt = i; cards.push(c); });
+          if (badAt >= 0) { smsg.className = "warn"; smsg.textContent = "Couldn’t read “" + parts[badAt] + "” (item " + (badAt + 1) + "). Use codes like 4C, 10H, AS or names like Four of Clubs."; return; }
+          var names = {}; cards.forEach(function (c) { names[c.code] = (names[c.code] || 0) + 1; });
+          var dup = Object.keys(names).filter(function (k) { return names[k] > 1; });
+          if (!cards.length) { smsg.className = "warn"; smsg.textContent = "Nothing to import."; return; }
+          lk.rows = cards.map(function (c, i) { return { key: String(i + 1), values: { card: c.name } }; });
+          d.fields[0].min = 1; d.fields[0].max = cards.length;
+          commit(); smsg.className = "hint ok"; smsg.textContent = cards.length + " cards set." + (cards.length !== 52 ? " (That isn’t 52.)" : "") + (dup.length ? " Repeated: " + dup.join(", ") + "." : ""); sta.value = ""; rerender(); } }));
+        w.appendChild(smsg);
+      }
+      // bulk paste
+      var ta = el("textarea", { placeholder: "Paste rows — one per line, columns separated by a comma or tab:\n37403, Chattanooga\n90210, Beverly Hills", style: "min-height:90px;margin-top:8px" });
+      var msg = el("div", { class: "hint" });
+      w.appendChild(ta);
+      w.appendChild(el("button", { class: "btn", text: "Add pasted rows", onclick: function () {
+        var added = 0, replaced = 0;
+        ta.value.split(/\r?\n/).forEach(function (line) {
+          if (!line.trim()) return;
+          var cells = line.split(/\t|,/).map(function (s) { return s.trim(); });
+          var key = cells.shift(); if (key === "") return;
+          var values = {}; lk.columns.forEach(function (c, i) { values[c.id] = cells[i] || ""; });
+          var existing = lk.rows.filter(function (r) { return String(r.key) === key; })[0];
+          if (existing) { existing.values = values; replaced++; } else { lk.rows.push({ key: key, values: values }); added++; }
+        });
+        commit(); msg.className = "hint ok"; msg.textContent = added + " added" + (replaced ? ", " + replaced + " updated" : "") + "."; ta.value = ""; rerender(); } }));
+      w.appendChild(msg);
+      return w;
     }
 
     // ---- the equation builder: the whole sum, number by number ----
@@ -378,7 +562,7 @@
     }
 
     var SECTIONS = [["force", "Force number", "the number every forced answer lands on"], ["tricks", "Tricks (patterns)", "pick or copy a setup"],
-      ["equation", "Equation & recording", "what is typed, and when things are recorded"], ["notify", "Notification", "what gets sent, and when"],
+      ["banks", "Banks & lookup tables", "what can be recorded, and extra info per value"], ["equation", "Equation & recording", "what is typed, and when things are recorded"], ["notify", "Notification", "what gets sent, and when"],
       ["data", "Shared data", "what other apps can read"], ["backup", "Backup & reset", ""]];
     function jumpTo(id) {
       var t = overlay.querySelector('[data-sec="' + id + '"]');
@@ -387,13 +571,14 @@
     function sec(id, node) { node.setAttribute("data-sec", id); return node; }
 
     function versionLine() {
-      var app = api.appVersion, eng = FE.VERSION, set = 9;
+      var app = api.appVersion, eng = FE.VERSION, set = 11;
       var ok = app === eng && eng === set;
       return el("div", { class: ok ? "hint" : "warn", style: "text-align:center;margin-top:10px",
         text: ok ? "Calculator v" + app : "Files out of sync (page v" + app + ", engine v" + eng + ", settings v" + set + "). Close the app fully and reopen it while online." });
     }
     function build() {
       overlay.innerHTML = "";
+      BANKS = FE.resolveBanks(cfg);
       var menu = el("div", { class: "navmenu" }, SECTIONS.map(function (x) {
         return el("div", { onclick: function () { menu.classList.remove("open"); navBtn.classList.remove("open"); jumpTo(x[0]); } },
           [x[1], x[2] ? el("small", { text: x[2] }) : null]);
@@ -403,7 +588,7 @@
       overlay.addEventListener("click", function () { menu.classList.remove("open"); navBtn.classList.remove("open"); });
       overlay.appendChild(el("div", { class: "bar" }, [navBtn, menu,
         el("button", { class: "btn main", style: "margin:0", text: "Done", onclick: close })]));
-      overlay.appendChild(el("div", { class: "wrap" }, [sec("force", forceCard()), sec("tricks", patternsCard()), sec("equation", equationCard()),
+      overlay.appendChild(el("div", { class: "wrap" }, [sec("force", forceCard()), sec("tricks", patternsCard()), sec("banks", banksCard()), sec("equation", equationCard()),
         sec("notify", notifyCard()), sec("data", dataCard()), sec("backup", backupCard()),
         el("div", { class: "hint", style: "text-align:center;margin-top:6px", text: "Changes save as you make them." }),
         versionLine()]));
@@ -411,5 +596,5 @@
     build();
   }
 
-  root.FCSettings = { VERSION: 9, open: open };
+  root.FCSettings = { VERSION: 11, open: open };
 })(typeof self !== "undefined" ? self : this);

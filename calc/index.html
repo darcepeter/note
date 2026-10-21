@@ -122,6 +122,8 @@
 </div>
 
 <script src="data.js"></script>
+<script src="data_zip.js"></script>
+<script src="data_areacodes.js"></script>
 <script src="engine.js"></script>
 <script src="settings.js"></script>
 <script>
@@ -146,7 +148,7 @@
     var bus = readBus();
     bus.seq += 1;
     bus.entries.push({ id: "forcecalc-" + bus.seq, seq: bus.seq, source: "forcecalc", bank: record.bank,
-      pattern: record.pattern, ts: record.ts, fields: record.fields });
+      pattern: record.pattern, ts: record.ts, fields: record.fields, meta: record.meta });
     if (bus.entries.length > 30) bus.entries = bus.entries.slice(-30);
     try { localStorage.setItem(BUS_KEY, JSON.stringify(bus)); } catch (e) {}
   }
@@ -237,7 +239,7 @@
     if (settingsOpen) return;
     settingsOpen = true;
     FCSettings.open({
-      calc: calc, engine: FCEngine, appVersion: 9, readBus: readBus, clearBus: clearBus, readNotifLog: readNotifLog, readLastEval: function () { try { return JSON.parse(localStorage.getItem("fc_last_eval")); } catch (e) { return null; } },
+      calc: calc, engine: FCEngine, appVersion: 11, readBus: readBus, clearBus: clearBus, readNotifLog: readNotifLog, readLastEval: function () { try { return JSON.parse(localStorage.getItem("fc_last_eval")); } catch (e) { return null; } },
       permission: permission, requestPermission: requestPermission,
       testNotification: function () { return showNotification("♈ Aries  ·  March 21", "Test notification"); },
       onClose: function () { settingsOpen = false; paint(); }

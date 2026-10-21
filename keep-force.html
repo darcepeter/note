@@ -334,6 +334,7 @@
 
   function loadState() {
     try {
+      try { localStorage.removeItem("keep_force_ringtone_v1"); } catch (e2) {} // frees the ringtone from the removed fake-call option
       var raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return defaultState();
       var p = JSON.parse(raw);
@@ -360,6 +361,7 @@
           delete g.force.rules;
         }
         g.categories.forEach(ensureCatTriggers);
+        ensurePeek(g);
         (g.notes || []).forEach(migrateNote);
       });
       var notes = Array.isArray(p.notes) ? p.notes : [];
@@ -587,6 +589,18 @@
     }
   }
   function catHasWord(c) { return (c.triggers || []).some(function (t) { return t.word && t.word.trim(); }); }
+  // Per-trick "peek" settings: on the Nth note opened in Note mode, privately send the opened
+  // note's title to the performer (a silent notification, optionally after a fake incoming call).
+  function ensurePeek(g) {
+    var p = g.peek;
+    if (!p || typeof p !== "object") p = g.peek = {};
+    if (typeof p.enabled !== "boolean") p.enabled = false;
+    delete p.mode; delete p.vibrate; // the fake-call option was removed; only the notification peek remains
+    if (typeof p.triggerCount !== "number" || p.triggerCount < 1) p.triggerCount = 1;
+    if (typeof p.delaySec !== "number" || p.delaySec < 0) p.delaySec = 5;
+    if (typeof p.clearAfterSec !== "number" || p.clearAfterSec < 0) p.clearAfterSec = 20;
+    if (typeof p.sendOnLeave !== "boolean") p.sendOnLeave = true; // leaving the app early sends the peek right away
+  }
   function addCategoryToGroup(group) {
     var color = CATEGORY_PALETTE[group.categories.length % CATEGORY_PALETTE.length];
     var cat = { id: uid("cat"), name: "", color: color, poolId: null, word: "", triggerCount: 1, replaceAll: false, triggers: [{ count: 1, word: "" }] };
@@ -598,6 +612,118 @@
     group.categories = group.categories.filter(function (c) { return c.id !== id; });
     group.notes.forEach(function (n) { if (n.tags) n.tags = n.tags.filter(function (t) { return t.categoryId !== id; }); });
     saveState();
+  }
+  // ---- ForceCalc link: the Calculator app records information (birthday, PIN, zip…) into shared storage on this
+  // site; a category can fill itself from the latest fresh entry instead of (or before) being dialed. ----
+  var CALC_BUS_KEY = "fc_bus_v1", CALC_USED_KEY = "notary_calc_used_v1", CALC_CATALOG_KEY = "notary_calc_catalog_v1";
+  function calcReadBus() {
+    try { var b = JSON.parse(localStorage.getItem(CALC_BUS_KEY)); return (b && Array.isArray(b.entries)) ? b.entries : []; } catch (e) { return []; }
+  }
+  function calcReadUsed() { try { return JSON.parse(localStorage.getItem(CALC_USED_KEY)) || {}; } catch (e) { return {}; } }
+  function calcMarkUsed(entryId) {
+    var u = calcReadUsed(); u[entryId] = Date.now();
+    var keys = Object.keys(u); if (keys.length > 80) keys.sort(function (a, b) { return u[a] - u[b]; }).slice(0, keys.length - 80).forEach(function (k) { delete u[k]; });
+    try { localStorage.setItem(CALC_USED_KEY, JSON.stringify(u)); } catch (e) {}
+  }
+  // Every kind of information the Calculator has ever sent, remembered so the pickers still work after the shared data is cleared.
+  function calcCatalog() {
+    var cat = {}; try { cat = JSON.parse(localStorage.getItem(CALC_CATALOG_KEY)) || {}; } catch (e) { cat = {}; }
+    var changed = false;
+    calcReadBus().forEach(function (en) {
+      if (!en || !en.bank) return;
+      if (en.meta && Array.isArray(en.meta.fields)) {
+        if (JSON.stringify(cat[en.bank]) !== JSON.stringify(en.meta)) { cat[en.bank] = en.meta; changed = true; }
+      } else if (!cat[en.bank]) {
+        cat[en.bank] = { name: en.bank, tag: "", fields: Object.keys(en.fields || {}).map(function (k) { return { id: k, label: k, kind: "text" }; }) }; changed = true;
+      }
+    });
+    if (changed) { try { localStorage.setItem(CALC_CATALOG_KEY, JSON.stringify(cat)); } catch (e) {} }
+    return cat;
+  }
+  function calcOn(c) { return !!(c && c.calc && c.calc.on && c.calc.bank && c.calc.field); }
+  // The newest entry for this category's bank that is still fresh (and, if "clear after use" is on, not already used).
+  function calcLatest(cc, ignoreUsed) {
+    var used = calcReadUsed(), now = Date.now(), best = null;
+    calcReadBus().forEach(function (en) {
+      if (!en || en.bank !== cc.bank || !en.fields) return;
+      if (cc.freshMin > 0 && now - en.ts > cc.freshMin * 60000) return;
+      if (!ignoreUsed && cc.clear !== false && used[en.id]) return;
+      if (!best || en.seq > best.seq) best = en;
+    });
+    return best;
+  }
+  // What this category would force right now from ForceCalc: { word, entry, label } or null.
+  function calcResolve(c, ignoreUsed) {
+    if (!calcOn(c)) return null;
+    var cc = c.calc, en = calcLatest(cc, ignoreUsed);
+    if (!en) return null;
+    var raw = en.fields[cc.field];
+    if (raw == null || raw === "") return null;
+    var label = String(raw);
+    if (!c.poolId) return { word: label, entry: en, label: label };
+    var pool = findPool(c.poolId);
+    if (!pool) return null;
+    var vals = (pool.columns && pool.columns.length > 1) ? poolCombinedValues(pool) : (pool.values || []);
+    if (cc.match === "order") {
+      var n = parseInt(raw, 10);
+      if (!(n >= 1 && n <= vals.length)) return null;
+      return { word: vals[n - 1], entry: en, label: poolValueLabel(vals[n - 1]) };
+    }
+    var want = label.trim().toLowerCase(), hit = null;
+    vals.forEach(function (v) { if (hit == null && !isImageValue(v) && String(v).trim().toLowerCase() === want) hit = v; });
+    return hit == null ? null : { word: hit, entry: en, label: String(hit) };
+  }
+  function calcAgeText(ts) {
+    var m = Math.max(0, Math.round((Date.now() - ts) / 60000));
+    return m < 1 ? "just now" : (m < 90 ? m + " min ago" : Math.round(m / 60) + " h ago");
+  }
+  function calcDefaultField(meta, isPool) {
+    var f = (meta && meta.fields) || [];
+    var pref = isPool ? ["signName", "monthName", "place", "card", "date"] : ["date", "place", "card", "all"];
+    for (var i = 0; i < pref.length; i++) { var m = f.filter(function (x) { return x.id === pref[i]; })[0]; if (m) return m.id; }
+    var firstText = f.filter(function (x) { return x.kind === "text"; })[0];
+    return (firstText || f[0] || {}).id || "";
+  }
+  // Trick-setup block for one category: choose where its value comes from.
+  function calcSourceHtml(c, isPool) {
+    var cc = c.calc || {};
+    var out = '<div class="row-flex" style="margin-top:8px;"><label style="font-size:13px; display:flex; align-items:center; gap:8px;">' +
+      '<input type="checkbox" data-calc-on="' + c.id + '" ' + (cc.on ? "checked" : "") + ' style="width:auto;"> Fill from ForceCalc</label></div>';
+    if (!cc.on) return out;
+    var catalog = calcCatalog(), bankIds = Object.keys(catalog);
+    var meta = catalog[cc.bank], fields = meta ? meta.fields : [];
+    function sel(field, options, cur) {
+      return '<select data-calc-field="' + field + '" data-cat-id="' + c.id + '" style="width:100%;">' + options.map(function (o) {
+        return '<option value="' + esc(o[0]) + '"' + (String(o[0]) === String(cur) ? " selected" : "") + '>' + esc(o[1]) + '</option>'; }).join("") + '</select>';
+    }
+    if (!bankIds.length) {
+      return out + '<div class="field-hint">Notary hasn\u2019t seen anything from ForceCalc yet. Record something in the Calculator once and its categories will appear here.</div>';
+    }
+    out += '<div class="field-hint" style="margin-top:6px;">Information</div>' +
+      sel("bank", bankIds.map(function (id) { return [id, catalog[id].name + (catalog[id].tag ? " (" + catalog[id].tag + ")" : "")]; }), cc.bank) +
+      '<div class="field-hint" style="margin-top:6px;">Which value</div>' +
+      sel("field", fields.map(function (f) { return [f.id, f.label + (f.kind === "number" ? " (number)" : "")]; }), cc.field);
+    if (isPool) {
+      out += '<div class="field-hint" style="margin-top:6px;">How it picks from the pool</div>' +
+        sel("match", [["name", "Match the pool value with the same text"], ["order", "Use the value as a position (1 = first pool value)"]], cc.match || "name");
+    }
+    out += '<div class="rule-grid" style="margin-top:8px;">' +
+      '<div style="flex:1;"><div class="field-hint">Only use if recorded within (minutes, 0 = any time)</div>' +
+      '<input type="number" min="0" data-calc-field="freshMin" data-cat-id="' + c.id + '" value="' + (cc.freshMin == null ? 120 : cc.freshMin) + '"></div></div>' +
+      '<label style="font-size:13px; display:flex; align-items:center; gap:8px; margin-top:6px;"><input type="checkbox" data-calc-field="clear" data-cat-id="' + c.id + '" ' + (cc.clear !== false ? "checked" : "") + ' style="width:auto;"> Use each recording only once</label>' +
+      '<div class="field-hint" style="margin-top:6px;">If nothing usable was recorded</div>' +
+      sel("fallback", isPool
+        ? [["dial", "Use the dial as normal"], ["word", "Force a fixed word"], ["none", "Do nothing"]]
+        : [["word", "Force the word typed above"], ["none", "Do nothing"]], cc.fallback || (isPool ? "dial" : "word"));
+    if (isPool && cc.fallback === "word") {
+      out += '<input type="text" data-calc-field="fallbackWord" data-cat-id="' + c.id + '" placeholder="Fixed word" value="' + esc(cc.fallbackWord || "") + '" style="margin-top:6px;width:100%;">';
+    }
+    var res = calcResolve(c, true), latest = calcLatest(cc, true);
+    out += '<div class="field-hint" style="margin-top:8px;">' + (latest
+      ? 'Latest from ForceCalc (' + esc(calcAgeText(latest.ts)) + '): <b>' + esc(String(latest.fields[cc.field] == null ? "\u2014" : latest.fields[cc.field])) + '</b>' +
+        (isPool ? (res ? ' \u2192 would force \u201C' + esc(res.label) + '\u201D' : ' \u2192 <b>no matching pool value</b>') : "")
+      : 'Nothing recent from ForceCalc for this yet.') + '</div>';
+    return out;
   }
   // ---- global pools ----
   function findPool(id) { return state.pools.find(function (p) { return p.id === id; }); }
@@ -917,7 +1043,7 @@
     return { has: has, total: total };
   }
   function groupHasRules(group) {
-    return (group.categories || []).some(function (c) { return c.poolId || catHasWord(c); });
+    return (group.categories || []).some(function (c) { return c.poolId || catHasWord(c) || calcOn(c); });
   }
   function groupPreviewText(group) {
     if (!group.notes.length) return "";
@@ -936,7 +1062,7 @@
     var tags = note.tags || [];
     if (!group) return tags.length > 0;
     var activeCatIds = {};
-    (group.categories || []).forEach(function (c) { if (c.poolId || catHasWord(c)) activeCatIds[c.id] = true; });
+    (group.categories || []).forEach(function (c) { if (c.poolId || catHasWord(c) || calcOn(c)) activeCatIds[c.id] = true; });
     if (!Object.keys(activeCatIds).length) return true;
     return tags.some(function (t) { return activeCatIds[t.categoryId]; });
   }
@@ -1281,10 +1407,124 @@
     state.pools.push(p); saveState();
     openPoolEdit(p.id);
   }
+  // ---------------- Peek: silent notification / fake incoming call ----------------
+  // Everything here lives outside render(): the pending timers, the notification, and the
+  // fake-call overlay (a plain node on <body>, never inside #app) all survive re-renders, so a
+  // call that appears mid-note can't be torn down by an unrelated render() while it's being dragged.
+  var peekPending = {}; // groupId -> { title, mode, clearAfterSec, vibrate, fireAt, timer }
+  var peekWakeLock = null;
+  var peekClearAt = []; // { tag, at } — notifications still due to be cleared
+
+  function peekNotificationStatus() { return ("Notification" in window) ? Notification.permission : "unsupported"; }
+
+  // What the performer gets told: the note's title, or its first line of text if it has none.
+  function peekTitleFor(note) {
+    var t = (note.title || "").trim();
+    if (t) return t;
+    if (note.type === "text") {
+      var first = plainText(buildTokens(note)).split("\n").map(function (l) { return l.trim(); }).filter(Boolean)[0];
+      if (first) return first.slice(0, 80);
+    }
+    return "Untitled note";
+  }
+
+  function getPeekRegistration() {
+    if (!("serviceWorker" in navigator) || !navigator.serviceWorker.getRegistration) return Promise.resolve(null);
+    return navigator.serviceWorker.getRegistration().then(function (r) { return r || null; }, function () { return null; });
+  }
+  // Resolves true only if a notification was really handed to the OS.
+  function showPeekNotification(title, clearAfterSec) {
+    if (!("Notification" in window) || Notification.permission !== "granted") return Promise.resolve(false);
+    // A fresh tag each time so a second peek is a new notification (and buzzes a paired watch)
+    // rather than silently replacing the first one.
+    var tag = "notary-peek-" + Date.now();
+    var opts = { silent: true, tag: tag, icon: "icon-192.png", badge: "icon-192.png" };
+    return getPeekRegistration().then(function (reg) {
+      if (reg && reg.showNotification) {
+        return reg.showNotification(title, opts).then(function () {
+          if (clearAfterSec > 0) {
+            peekClearAt.push({ tag: tag, at: Date.now() + clearAfterSec * 1000 });
+            // The service worker can keep running after the page is frozen, so let it do the clearing too.
+            try { var sw = reg.active || navigator.serviceWorker.controller; if (sw) sw.postMessage({ type: "peek-clear", tag: tag, afterMs: clearAfterSec * 1000 }); } catch (e) {}
+            setTimeout(function () {
+              reg.getNotifications({ tag: tag }).then(function (list) { list.forEach(function (n) { n.close(); }); }).catch(function () {});
+            }, clearAfterSec * 1000);
+          }
+          return true;
+        });
+      }
+      var n = new Notification(title, opts); // desktop/testing fallback; Android requires the registration path above
+      if (clearAfterSec > 0) setTimeout(function () { try { n.close(); } catch (e) {} }, clearAfterSec * 1000);
+      return true;
+    }).catch(function () { return false; });
+  }
+
+  function acquirePeekWakeLock() {
+    try {
+      if (!navigator.wakeLock || peekWakeLock) return;
+      navigator.wakeLock.request("screen").then(function (l) {
+        peekWakeLock = l;
+        l.addEventListener("release", function () { if (peekWakeLock === l) peekWakeLock = null; });
+      }).catch(function () {});
+    } catch (e) {}
+  }
+  function releasePeekWakeLockIfIdle() {
+    if (Object.keys(peekPending).length) return;
+    if (peekWakeLock) { try { peekWakeLock.release(); } catch (e) {} peekWakeLock = null; }
+  }
+
+  function cancelPeek(groupId) {
+    var p = peekPending[groupId];
+    if (p) { clearTimeout(p.timer); delete peekPending[groupId]; }
+    releasePeekWakeLockIfIdle();
+  }
+  function schedulePeek(group, note) {
+    var cfg = group.peek;
+    cancelPeek(group.id);
+    // Snapshot the settings now so editing the trick mid-run can't change a peek already queued.
+    var rec = { title: peekTitleFor(note), clearAfterSec: cfg.clearAfterSec, sendOnLeave: cfg.sendOnLeave !== false,
+                fireAt: Date.now() + cfg.delaySec * 1000, timer: null };
+    rec.timer = setTimeout(function () { runPeek(group.id); }, cfg.delaySec * 1000);
+    peekPending[group.id] = rec;
+    acquirePeekWakeLock(); // keep the screen awake while waiting so timers aren't throttled
+  }
+  function runPeek(groupId) {
+    var rec = peekPending[groupId];
+    if (!rec) return;
+    clearTimeout(rec.timer);
+    delete peekPending[groupId];
+    showPeekNotification(rec.title, rec.clearAfterSec);
+    releasePeekWakeLockIfIdle();
+  }
+  // If the phone was asleep or the app backgrounded past a peek's time, deliver it as soon as
+  // the page is visible again rather than losing it.
+  // Leaving early (screen locked, app switched or closed): timers stop running, so send any
+  // pending peek immediately instead of losing it (per-trick "send right away" option).
+  function flushPeeksOnLeave() {
+    Object.keys(peekPending).forEach(function (gid) { var r = peekPending[gid]; if (r && r.sendOnLeave) runPeek(gid); });
+  }
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "hidden") flushPeeksOnLeave();
+  });
+  window.addEventListener("pagehide", flushPeeksOnLeave);
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState !== "visible") return;
+    var now = Date.now();
+    // Sweep peek notifications whose clear-timer was frozen while the app was away.
+    var due = peekClearAt.filter(function (c) { return c.at <= now; });
+    peekClearAt = peekClearAt.filter(function (c) { return c.at > now; });
+    if (due.length) getPeekRegistration().then(function (reg) {
+      if (reg) due.forEach(function (c) { reg.getNotifications({ tag: c.tag }).then(function (l) { l.forEach(function (n) { n.close(); }); }).catch(function () {}); });
+    });
+    Object.keys(peekPending).forEach(function (gid) { var r = peekPending[gid]; if (r && r.fireAt <= now) runPeek(gid); });
+    if (Object.keys(peekPending).length) acquirePeekWakeLock();
+  });
+
   function openGroupView(id) {
     navigate(function () {
       currentGroupId = id; lastActiveGroupId = id; sessionCounts[id] = 0; sessionForced[id] = {};
       dialedPoolValue[id] = {}; groupDialCatIndex[id] = 0; dialLockedGroups[id] = false;
+      cancelPeek(id); // a fresh session — a peek still pending from the last run no longer applies
       // Column progress is keyed per category (id:catId) since each pool-linked category
       // dials independently — clear every one of this group's, not just a single group-level key.
       var enteringGroup = findGroup(id);
@@ -1314,20 +1554,31 @@
   }
   function openNoteFromGroupView(groupId, noteId) {
     var group = findGroup(groupId), note = findNoteInGroup(group, noteId);
-    if (!isMagic() && group.force.armed) {
+    var peekOn = !!(group.peek && group.peek.enabled);
+    if (!isMagic() && (group.force.armed || peekOn)) {
       sessionCounts[groupId] = (sessionCounts[groupId] || 0) + 1;
       var count = sessionCounts[groupId];
+      if (peekOn && count === group.peek.triggerCount) schedulePeek(group, note);
       var candidates = (group.categories || []).filter(function (c) {
         if (c.poolId) return c.triggerCount === count;
         // A static word category can have several occurrences, each tied to its own
         // note-open count — it's a candidate whenever one of them matches this count.
-        return (c.triggers || []).some(function (t) { return t.count === count && t.word && t.word.trim(); });
+        return (c.triggers || []).some(function (t) { return t.count === count && ((t.word && t.word.trim()) || calcOn(c)); });
       });
-      if (candidates.length && note.type === "text") {
+      if (group.force.armed && candidates.length && note.type === "text") {
         var noteCatIds = {};
         buildTokens(note).forEach(function (t) { if (t.type === "tag") noteCatIds[t.categoryId] = true; });
         (note.images || []).forEach(function (im) { if (im.taggedCategoryId) noteCatIds[im.taggedCategoryId] = true; });
         var matching = candidates.filter(function (c) { return noteCatIds[c.id]; }).map(function (c) {
+          if (calcOn(c)) {
+            var cr = calcResolve(c, false);
+            if (cr) return { categoryId: c.id, word: cr.word, replaceAll: c.replaceAll, calcEntryId: cr.entry.id, calcOnce: c.calc.clear !== false };
+            if (c.calc.fallback === "none") return null;
+            if (c.poolId && c.calc.fallback === "word") {
+              var fw = (c.calc.fallbackWord || "").trim();
+              return fw ? { categoryId: c.id, word: fw, replaceAll: c.replaceAll } : null;
+            }
+          }
           if (!c.poolId) {
             var trig = (c.triggers || []).find(function (t) { return t.count === count; });
             return (trig && trig.word && trig.word.trim()) ? { categoryId: c.id, word: trig.word, replaceAll: c.replaceAll } : null;
@@ -1340,6 +1591,7 @@
           return { categoryId: c.id, word: dialed, replaceAll: c.replaceAll };
         }).filter(function (c) { return c; });
         if (matching.length) {
+          matching.forEach(function (r) { if (r.calcEntryId && r.calcOnce) calcMarkUsed(r.calcEntryId); });
           if (!sessionForced[groupId]) sessionForced[groupId] = {};
           var entry = sessionForced[groupId][noteId] || { rules: [], overrideText: null };
           matching.forEach(function (r) {
@@ -1356,6 +1608,7 @@
   function addGroup() {
     var g = { id: uid("grp"), title: "Untitled", color: "#FFFFFF", previewRows: 3, notes: [],
       categories: [], force: { armed: false } };
+    ensurePeek(g);
     state.groups.push(g); homeOrderEnsure(); saveState();
     render(); // just create it and show it on Home — no auto-navigate into its setup
   }
@@ -1393,6 +1646,8 @@
       newGroup.id = uid("grp");
       if (typeof newGroup.previewRows !== "number") newGroup.previewRows = 3;
       newGroup.force = { armed: false };
+      ensurePeek(newGroup);
+      newGroup.peek.enabled = false; // like armed: an imported trick starts switched off
       (newGroup.notes || []).forEach(function (n) { n.id = uid("note"); if (n.type === "list") (n.items || []).forEach(function (it) { it.id = uid("item"); }); });
       (newGroup.categories || []).forEach(function (c) {
         var oldCatId = c.id;
@@ -1750,6 +2005,10 @@
         "A single-column pool can hold images instead of (or alongside) text. Link a category to that pool and its forced value can be a picture \u2014 handy for dialing through a set of card faces or other visual references. " +
         "Multi-column pools stay text-only, since combining an image with text doesn't make sense there."
       )) +
+      docSection("Peek", docP(
+        "Peek privately tells you which note was opened. Turn it on in a trick’s setup, pick which note-open it fires on (like a force trigger) and a delay. In Note mode, when that note is opened and the delay passes, its title arrives as a <b>silent notification</b> on this phone — a paired watch mirrors it. " +
+        "Allow notifications once from the trick’s setup, and use <b>Test peek now</b> with your watch connected before a show. The app keeps the screen awake while the delay counts down. If you lock the phone or leave the app early, <b>Send right away if I leave</b> (on by default) delivers the peek immediately instead of losing it."
+      )) +
       docSection("Export & import", docP(
         "From Magic settings, export one or more tricks (with their pools) as a file or as text you can paste elsewhere, and import them back the same way. Matching pool names are reused on import so you don't end up with duplicates."
       ));
@@ -2010,6 +2269,46 @@
     );
   }
 
+  function renderPeekSection(group) {
+    ensurePeek(group);
+    var p = group.peek;
+    var perm = peekNotificationStatus();
+    var html =
+      '<div class="section-label">Peek</div>' +
+      '<div class="field-hint">Privately learn which note was opened. In Note mode, when the chosen note is opened, its title is sent to you — as a silent notification on this phone (a paired watch mirrors it).</div>' +
+      '<div class="row-flex" style="margin-top:10px;">' +
+        '<div><div style="font-size:14px; font-weight:600;">Peek enabled</div></div>' +
+        '<label class="switch"><input type="checkbox" id="peek-enabled" ' + (p.enabled ? "checked" : "") + '><span class="slider"></span></label>' +
+      '</div>';
+    if (!p.enabled) return html;
+    html +=
+      '<div class="rule-grid" style="margin-top:12px;">' +
+        '<div><div class="field-hint" style="margin:0 0 4px;">Fires on note #</div>' +
+          '<input type="number" min="1" id="peek-trigger" value="' + p.triggerCount + '"></div>' +
+        '<div><div class="field-hint" style="margin:0 0 4px;">Delay (seconds)</div>' +
+          '<input type="number" min="0" max="3600" step="1" id="peek-delay" value="' + p.delaySec + '"></div>' +
+      '</div>' +
+      '<div class="field-hint">Counts the Nth note opened from this trick, like a force trigger. The delay starts when that note opens.</div>' +
+      '<div class="row-flex" style="margin-top:10px;">' +
+        '<div><div style="font-size:14px; font-weight:600;">Send right away if I leave</div>' +
+        '<div class="field-hint" style="margin:2px 0 0;">If the screen locks or the app is closed or switched before the delay ends, the peek is sent immediately.</div></div>' +
+        '<label class="switch"><input type="checkbox" id="peek-leave" ' + (p.sendOnLeave ? "checked" : "") + '><span class="slider"></span></label>' +
+      '</div>' +
+      '<div class="field-hint" style="margin:10px 0 4px;">Clear it after (seconds, 0 = leave it)</div>' +
+      '<input type="number" min="0" max="3600" step="1" id="peek-clear" value="' + p.clearAfterSec + '" style="width:110px;">' +
+      '<div class="field-hint">Removes it from this phone’s notification shade so nothing is left behind. Your watch keeps its copy.</div>';
+    var permLine;
+    if (perm === "granted") permLine = '<div class="status-line">Notifications are allowed.</div>';
+    else if (perm === "denied") permLine = '<div class="status-line">Notifications are blocked for this app — allow them in Android Settings › Apps › this app › Notifications, then come back.</div>';
+    else if (perm === "unsupported") permLine = '<div class="status-line">This browser can’t show notifications.</div>';
+    else permLine = '<div class="status-line">Notifications aren’t allowed yet — the peek can’t reach you until they are.</div>' +
+      '<div class="btn-row"><button class="btn btn-sm" id="peek-permission">Allow notifications</button></div>';
+    html += permLine +
+      '<div class="btn-row" style="margin-top:6px;"><button class="btn btn-sm btn-ghost" id="peek-test">Test peek now</button></div>' +
+      '<div class="field-hint">Test it with your watch connected before a performance.</div>';
+    return html;
+  }
+
   function renderGroupSetup() {
     var group = findGroup(currentGroupId);
     var swatches = TRICK_COLORS.map(function (c) {
@@ -2050,6 +2349,7 @@
             '</div>' +
           '</div>' +
           middleSection +
+          calcSourceHtml(c, isPoolLinked) +
           '<div class="row-flex" style="margin-top:8px;">' +
             '<label style="font-size:13px; display:flex; align-items:center; gap:8px;">' +
               '<input type="checkbox" data-cat-field="replaceAll" data-cat-id="' + c.id + '" ' + (c.replaceAll ? "checked" : "") + ' style="width:auto;"> Replace every instance' +
@@ -2077,7 +2377,8 @@
             '<div class="field-hint">While armed, opening notes counts toward your categories \u2014 in either mode.</div></div>' +
           '<label class="switch"><input type="checkbox" id="force-armed" ' + (group.force.armed ? "checked" : "") + (groupHasRules(group) ? "" : " disabled") + '><span class="slider"></span></label>' +
         '</div>' +
-        (!groupHasRules(group) ? '<div class="status-line">Add at least one category with a word or pool before arming.</div>' : "");
+        (!groupHasRules(group) ? '<div class="status-line">Add at least one category with a word or pool before arming.</div>' : "") +
+        renderPeekSection(group);
     }
 
     return (
@@ -2901,6 +3202,37 @@
         document.querySelectorAll("[data-del-group-cat]").forEach(function (b) {
           b.addEventListener("click", function () { deleteCategoryFromGroup(group, b.getAttribute("data-del-group-cat")); render(); });
         });
+        document.querySelectorAll("[data-calc-on]").forEach(function (b) {
+          b.addEventListener("change", function () {
+            var cat = findCategoryInGroup(group, b.getAttribute("data-calc-on"));
+            if (b.checked) {
+              var catalog = calcCatalog(), ids = Object.keys(catalog), bank = (cat.calc && cat.calc.bank) || ids[0] || "";
+              cat.calc = cat.calc || {};
+              cat.calc.on = true;
+              if (!cat.calc.bank) cat.calc.bank = bank;
+              if (!cat.calc.field) cat.calc.field = calcDefaultField(catalog[cat.calc.bank], !!cat.poolId);
+              if (!cat.calc.match) cat.calc.match = "name";
+              if (cat.calc.freshMin == null) cat.calc.freshMin = 120;
+              if (cat.calc.clear == null) cat.calc.clear = true;
+              if (!cat.calc.fallback) cat.calc.fallback = cat.poolId ? "dial" : "word";
+            } else if (cat.calc) cat.calc.on = false;
+            saveState(); render();
+          });
+        });
+        document.querySelectorAll("[data-calc-field]").forEach(function (input) {
+          var catId = input.getAttribute("data-cat-id"), field = input.getAttribute("data-calc-field");
+          input.addEventListener("change", function () {
+            var cat = findCategoryInGroup(group, catId); if (!cat || !cat.calc) return;
+            if (field === "clear") cat.calc.clear = input.checked;
+            else if (field === "freshMin") cat.calc.freshMin = Math.max(0, parseInt(input.value, 10) || 0);
+            else {
+              cat.calc[field] = input.value;
+              if (field === "bank") cat.calc.field = calcDefaultField(calcCatalog()[input.value], !!cat.poolId);
+            }
+            saveState();
+            if (input.tagName === "SELECT" || field === "clear") render();
+          });
+        });
         document.querySelectorAll("[data-unlink-pool]").forEach(function (b) {
           b.addEventListener("click", function () {
             var cat = findCategoryInGroup(group, b.getAttribute("data-unlink-pool"));
@@ -3017,6 +3349,39 @@
             var nextCount = cat.triggers.length ? Math.max.apply(null, cat.triggers.map(function (t) { return t.count; })) + 1 : 1;
             cat.triggers.push({ count: nextCount, word: "" });
             saveState(); render();
+          });
+        });
+        // ---- Peek settings ----
+        ensurePeek(group);
+        var peekEnabledEl = document.getElementById("peek-enabled");
+        if (peekEnabledEl) peekEnabledEl.addEventListener("change", function (e) { group.peek.enabled = e.target.checked; saveState(); render(); });
+        var peekLeaveEl = document.getElementById("peek-leave");
+        if (peekLeaveEl) peekLeaveEl.addEventListener("change", function (e) { group.peek.sendOnLeave = e.target.checked; saveState(); });
+        var peekTriggerEl = document.getElementById("peek-trigger");
+        if (peekTriggerEl) peekTriggerEl.addEventListener("input", function () { group.peek.triggerCount = Math.max(1, parseInt(peekTriggerEl.value, 10) || 1); saveState(); });
+        var peekDelayEl = document.getElementById("peek-delay");
+        if (peekDelayEl) peekDelayEl.addEventListener("input", function () {
+          var v = parseFloat(peekDelayEl.value);
+          group.peek.delaySec = isNaN(v) ? 0 : Math.max(0, Math.min(3600, v));
+          saveState();
+        });
+        var peekClearEl = document.getElementById("peek-clear");
+        if (peekClearEl) peekClearEl.addEventListener("input", function () {
+          var v = parseFloat(peekClearEl.value);
+          group.peek.clearAfterSec = isNaN(v) ? 0 : Math.max(0, Math.min(3600, v));
+          saveState();
+        });
+        var peekPermBtn = document.getElementById("peek-permission");
+        if (peekPermBtn) peekPermBtn.addEventListener("click", function () {
+          try {
+            var r = Notification.requestPermission(function () { render(); }); // callback form for older browsers
+            if (r && r.then) r.then(function () { render(); });
+          } catch (e) { render(); }
+        });
+        var peekTestBtn = document.getElementById("peek-test");
+        if (peekTestBtn) peekTestBtn.addEventListener("click", function () {
+          showPeekNotification("Test peek", group.peek.clearAfterSec).then(function (ok) {
+            showToast(ok ? "Sent — check your notifications / watch" : "Couldn’t send — allow notifications first");
           });
         });
         var armedEl = document.getElementById("force-armed");

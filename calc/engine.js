@@ -112,7 +112,9 @@
   // ─────────────────────────────────────────────────────────────────────────
   var BANKS = {
     birthday: {
-      id: "birthday", name: "Birthday",
+      id: "birthday", name: "Birthday", tag: "birthday", builtin: true,
+      derivedDefs: [["date", "Date"], ["monthName", "Month name"], ["sign", "Star sign (with symbol)"], ["signName", "Star sign name"],
+        ["signSymbol", "Star sign symbol"], ["signIndex", "Star sign order (1–12)", "number"], ["element", "Element"], ["quality", "Quality"], ["celebrity", "Celebrity"]],
       sample: { day: 21, month: 10 },
       fields: [
         { id: "day", label: "Day", type: "int", min: 1, max: 31 },
@@ -137,11 +139,250 @@
     }
   };
 
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // More built-in banks: Full birthday, Zip code, Area code and card stacks.
+  // Big tables (zip codes, area codes) live in data_zip.js / data_areacodes.js and are read on first use.
+  // ─────────────────────────────────────────────────────────────────────────
+  var STATE_NAMES = {"AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas", "CA": "California", "CO": "Colorado", "CT": "Connecticut", "DE": "Delaware", "DC": "Washington D.C.", "FL": "Florida", "GA": "Georgia", "HI": "Hawaii", "ID": "Idaho", "IL": "Illinois", "IN": "Indiana", "IA": "Iowa", "KS": "Kansas", "KY": "Kentucky", "LA": "Louisiana", "ME": "Maine", "MD": "Maryland", "MA": "Massachusetts", "MI": "Michigan", "MN": "Minnesota", "MS": "Mississippi", "MO": "Missouri", "MT": "Montana", "NE": "Nebraska", "NV": "Nevada", "NH": "New Hampshire", "NJ": "New Jersey", "NM": "New Mexico", "NY": "New York", "NC": "North Carolina", "ND": "North Dakota", "OH": "Ohio", "OK": "Oklahoma", "OR": "Oregon", "PA": "Pennsylvania", "RI": "Rhode Island", "SC": "South Carolina", "SD": "South Dakota", "TN": "Tennessee", "TX": "Texas", "UT": "Utah", "VT": "Vermont", "VA": "Virginia", "WA": "Washington State", "WV": "West Virginia", "WI": "Wisconsin", "WY": "Wyoming", "PR": "Puerto Rico", "VI": "U.S. Virgin Islands", "GU": "Guam", "AS": "American Samoa", "MP": "Northern Mariana Islands", "AB": "Alberta", "BC": "British Columbia", "MB": "Manitoba", "NB": "New Brunswick", "NL": "Newfoundland and Labrador", "NS": "Nova Scotia", "ON": "Ontario", "PE": "Prince Edward Island", "QC": "Quebec", "SK": "Saskatchewan", "NT": "Northwest Territories", "NU": "Nunavut", "YT": "Yukon"};
+  var LNY = "01310219020801290216020401250213020201220210013002180206012602140203012302110201022002080128021602050124021302020123021001300217020601260214020401240211013102190208012702150205012502130202012202100129021702060127021402030124021201310218020801280215020501250213020201210209013002170206012702150203012302110131021802070128021602050125021302020220020901290217020601270215020401230210013102190207012802160205012402120201012202090129021802070126021402030123021001310219020801280216020501250212020101220210012902170206012602130203012302110131021902080128021502040124021202010122021001300217020601260214020201230211020102190208012802150204012402120202012102090129021702050126021402030123021101310219020701270215020501240212020201220209012902170206012602140203012402100130021802070127021502050125021202010121"; // Chinese New Year (MMDD) for 1900–2099
+  var tableCache = {};
+  function dataTable(name) {
+    if (tableCache[name]) return tableCache[name];
+    var g = typeof globalThis !== "undefined" ? globalThis : (typeof window !== "undefined" ? window : {});
+    var raw = g.FCData && g.FCData[name], map = {};
+    if (typeof raw !== "string") return null; // the data file did not load
+    raw.split("\n").forEach(function (line) { var p = line.split("|"); if (p[0]) map[p[0]] = p.slice(1); });
+    tableCache[name] = map;
+    return map;
+  }
+  function pad2(n) { return n < 10 ? "0" + n : String(n); }
+  function ordinal(n) { var s = ["th", "st", "nd", "rd"], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
+  function isLeap(y) { return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0; }
+  function daysIn(m, y) { return [31, isLeap(y) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][m - 1]; }
+  var WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  var PLANETS = ["Mars", "Venus", "Mercury", "the Moon", "the Sun", "Mercury", "Venus", "Pluto", "Jupiter", "Saturn", "Uranus", "Neptune"];
+  var BIRTHSTONES = ["Garnet", "Amethyst", "Aquamarine", "Diamond", "Emerald", "Pearl", "Ruby", "Peridot", "Sapphire", "Opal", "Topaz", "Turquoise"];
+  var BIRTHFLOWERS = ["Carnation", "Violet", "Daffodil", "Daisy", "Lily of the Valley", "Rose", "Larkspur", "Gladiolus", "Aster", "Marigold", "Chrysanthemum", "Narcissus"];
+  var ANIMALS = ["Rat", "Ox", "Tiger", "Rabbit", "Dragon", "Snake", "Horse", "Goat", "Monkey", "Rooster", "Dog", "Pig"];
+  var CN_ELEMENTS = ["Metal", "Metal", "Water", "Water", "Wood", "Wood", "Fire", "Fire", "Earth", "Earth"];
+  function chineseYear(y, m, d) { // the lunar year they were born in (before Chinese New Year = previous animal)
+    var s = LNY.substr((y - 1900) * 4, 4);
+    if (s.length === 4 && (m * 100 + d) < parseInt(s, 10)) return y - 1;
+    return y;
+  }
+  function generation(y) {
+    return y <= 1927 ? "Greatest Generation" : y <= 1945 ? "Silent Generation" : y <= 1964 ? "Baby Boomer" : y <= 1980 ? "Generation X" : y <= 1996 ? "Millennial" : y <= 2012 ? "Generation Z" : "Generation Alpha";
+  }
+  function moonPhase(y, m, d) { // approximate (mean lunation), good to about a day
+    var jd = Date.UTC(y, m - 1, d, 12) / 86400000 + 2440587.5, syn = 29.530588853;
+    var a = (((jd - 2451550.1) % syn) + syn) % syn;
+    return a < 1.85 ? "New Moon" : a < 5.54 ? "Waxing Crescent" : a < 9.23 ? "First Quarter" : a < 12.91 ? "Waxing Gibbous" : a < 16.61 ? "Full Moon" : a < 20.3 ? "Waning Gibbous" : a < 23.99 ? "Last Quarter" : a < 27.68 ? "Waning Crescent" : "New Moon";
+  }
+  function reduceNum(n) { while (n > 9 && n !== 11 && n !== 22 && n !== 33) { var s = 0; String(n).split("").forEach(function (c) { s += +c; }); n = s; } return n; }
+  function season(m, d) {
+    var k = m * 100 + d;
+    return k >= 1221 || k < 320 ? "Winter" : k < 621 ? "Spring" : k < 922 ? "Summer" : "Fall";
+  }
+  function birthdayExtras(v, nowMs) {
+    var d = v.day, m = v.month, y = v.year;
+    if (d > daysIn(m, y)) return null; // not a real date
+    var now = new Date(nowMs != null ? nowMs : Date.now());
+    var ty = now.getFullYear(), tm = now.getMonth() + 1, td = now.getDate();
+    var age = ty - y - ((tm < m || (tm === m && td < d)) ? 1 : 0);
+    var todayU = Date.UTC(ty, tm - 1, td), bornU = Date.UTC(y, m - 1, d);
+    var nb = (m === 2 && d === 29 && !isLeap(ty)) ? [3, 1] : [m, d];
+    var nextU = Date.UTC(ty, nb[0] - 1, nb[1]);
+    if (nextU < todayU) { var ny = ty + 1; nb = (m === 2 && d === 29 && !isLeap(ny)) ? [3, 1] : [m, d]; nextU = Date.UTC(ny, nb[0] - 1, nb[1]); }
+    var nextDate = new Date(nextU);
+    var dayOfYear = Math.round((bornU - Date.UTC(y, 0, 1)) / 86400000) + 1;
+    var cy = chineseYear(y, m, d), sign = getStarSign(m, d), signName = sign.slice(sign.indexOf(" ") + 1), idx = SIGNS.indexOf(signName);
+    var out = {
+      date: monthName(m) + " " + d + ", " + y,
+      dateShort: pad2(m) + "/" + pad2(d) + "/" + y,
+      dayMonth: monthName(m) + " " + d,
+      monthName: monthName(m),
+      dayOrdinal: ordinal(d),
+      weekday: WEEKDAYS[new Date(bornU).getUTCDay()],
+      season: season(m, d),
+      decade: Math.floor(y / 10) * 10 + "s",
+      leapYear: isLeap(y) ? "yes" : "no",
+      dayOfYear: dayOfYear,
+      sign: sign, signName: signName, signSymbol: sign.slice(0, sign.indexOf(" ")), signIndex: idx + 1,
+      element: ELEMENTS[idx % 4], quality: QUALITIES[idx % 3], rulingPlanet: PLANETS[idx],
+      birthstone: BIRTHSTONES[m - 1], birthFlower: BIRTHFLOWERS[m - 1],
+      chineseZodiac: ANIMALS[((cy - 4) % 12 + 12) % 12],
+      chineseElement: CN_ELEMENTS[((cy % 10) + 10) % 10],
+      generation: generation(y),
+      moonPhase: moonPhase(y, m, d),
+      lifePath: reduceNum(reduceNum(m) + reduceNum(d) + reduceNum(y)),
+      age: age, turningAge: age + 1,
+      daysAlive: Math.round((todayU - bornU) / 86400000),
+      daysToBirthday: Math.round((nextU - todayU) / 86400000),
+      nextBirthdayWeekday: WEEKDAYS[nextDate.getUTCDay()],
+      yearTurned18: y + 18, yearTurned21: y + 21, yearTurned30: y + 30,
+      celebrity: getCelebrity(m, d)
+    };
+    out.chineseZodiac2 = out.chineseElement + " " + out.chineseZodiac;
+    return out;
+  }
+  var BDAY_DEFS = [["date", "Full date (October 21, 1985)"], ["dateShort", "Date (10/21/1985)"], ["dayMonth", "Day and month (October 21)"], ["monthName", "Month name"], ["dayOrdinal", "Day (21st)"],
+    ["weekday", "Day of the week born"], ["season", "Season born"], ["decade", "Decade (1980s)"], ["leapYear", "Leap year? (yes/no)"], ["dayOfYear", "Day of the year (1–366)", "number"],
+    ["sign", "Star sign (with symbol)"], ["signName", "Star sign name"], ["signSymbol", "Star sign symbol"], ["signIndex", "Star sign order (1–12)", "number"],
+    ["element", "Element (Fire/Earth/Air/Water)"], ["quality", "Quality (Cardinal/Fixed/Mutable)"], ["rulingPlanet", "Ruling planet"],
+    ["birthstone", "Birthstone"], ["birthFlower", "Birth flower"], ["chineseZodiac", "Chinese zodiac animal"], ["chineseElement", "Chinese zodiac element"], ["chineseZodiac2", "Chinese zodiac (Fire Horse)"],
+    ["generation", "Generation"], ["moonPhase", "Moon phase at birth (approximate)"], ["lifePath", "Life path number", "number"],
+    ["age", "Age today", "number"], ["turningAge", "Age at next birthday", "number"], ["daysAlive", "Days alive", "number"], ["daysToBirthday", "Days until next birthday", "number"],
+    ["nextBirthdayWeekday", "Weekday of next birthday"], ["yearTurned18", "Year they turned 18", "number"], ["yearTurned21", "Year they turned 21", "number"], ["yearTurned30", "Year they turned 30", "number"],
+    ["celebrity", "Celebrity with the same birthday"]];
+  BANKS.birthdate = {
+    id: "birthdate", name: "Full birthday", tag: "birthday", builtin: true, wide: true,
+    about: "Day, month and year. Gives the weekday born, star sign, element, ruling planet, birthstone, birth flower, Chinese zodiac, generation, moon phase, age, life path number, a same-birthday celebrity and more. Chinese zodiac uses the real Chinese New Year date.",
+    derivedDefs: BDAY_DEFS, sample: { day: 21, month: 10, year: 1985 },
+    invalidNote: "that isn’t a real calendar date.",
+    fields: [
+      { id: "day", label: "Day", type: "int", min: 1, max: 31 },
+      { id: "month", label: "Month", type: "int", min: 1, max: 12 },
+      { id: "year", label: "Year", type: "int", min: 1900, max: 2099 }
+    ],
+    derive: function (v, nowMs) { return birthdayExtras(v, nowMs); }
+  };
+
+  // zip code → city and state
+  BANKS.zip = {
+    id: "zip", name: "Zip code", tag: "zip code", builtin: true, wide: true, dataset: "zip",
+    about: "A 5-digit US zip code (about 42,500 of them). Gives the city, state and “City, ST”. A zip that doesn’t exist isn’t recorded.",
+    derivedDefs: [["zipText", "Zip (5 digits)"], ["city", "City"], ["state", "State (TN)"], ["stateName", "State name (Tennessee)"], ["place", "City, State (Chattanooga, TN)"]],
+    sample: { zip: 37402 }, invalidNote: "that zip code isn’t in the zip table (or the zip data file didn’t load).",
+    fields: [{ id: "zip", label: "Zip", type: "int", min: 501, max: 99950, pad: 5 }],
+    derive: function (v) {
+      var t = dataTable("zip"), z = padText(v.zip, 5), row = t && t[z];
+      if (!row) return null;
+      return { zipText: z, city: row[0], state: row[1], stateName: STATE_NAMES[row[1]] || row[1], place: row[0] + ", " + row[1] };
+    }
+  };
+  // area code → place
+  BANKS.areacode = {
+    id: "areacode", name: "Area code", tag: "area code", builtin: true, wide: true, dataset: "areacodes",
+    about: "A 3-digit phone area code (US, Canada and the Caribbean). Gives the main city and the state or region.",
+    derivedDefs: [["areaText", "Area code"], ["place", "Main place (Chattanooga, TN)"], ["region", "State or region (Tennessee)"]],
+    sample: { code: 423 }, invalidNote: "that area code isn’t in the table (or the area code data file didn’t load).",
+    fields: [{ id: "code", label: "Area code", type: "int", min: 200, max: 999, pad: 3 }],
+    derive: function (v) {
+      var t = dataTable("areacodes"), z = padText(v.code, 3), row = t && t[z];
+      if (!row) return null;
+      return { areaText: z, place: row[0], region: row[1] };
+    }
+  };
+
+  // card stacks: a position (1–52) gives the card at that position, plus its neighbours
+  var RANKS = ["Ace", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Jack", "Queen", "King"];
+  var RANK_SHORT = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
+  var SUITS = { C: ["Clubs", "♣", "Black"], H: ["Hearts", "♥", "Red"], S: ["Spades", "♠", "Black"], D: ["Diamonds", "♦", "Red"] };
+  function parseCard(code) { // "4C", "10H", "AS" or a longer name like "Four of Clubs" / "4♣"
+    var s = String(code).trim().toUpperCase().replace(/♣/g, "C").replace(/♥/g, "H").replace(/♠/g, "S").replace(/♦/g, "D");
+    var m = /^(10|[2-9]|A|J|Q|K|ACE|JACK|QUEEN|KING|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|TEN)\s*(?:OF\s*)?(C|H|S|D|CLUBS|HEARTS|SPADES|DIAMONDS)$/.exec(s);
+    if (!m) return null;
+    var r = m[1], ri = RANK_SHORT.indexOf(r);
+    if (ri < 0) ri = RANKS.map(function (x) { return x.toUpperCase(); }).indexOf(r);
+    var su = m[2].charAt(0);
+    return ri < 0 ? null : { rank: RANKS[ri], short: RANK_SHORT[ri] + SUITS[su][1], code: RANK_SHORT[ri] + su, suit: SUITS[su][0], symbol: SUITS[su][1], color: SUITS[su][2], name: RANKS[ri] + " of " + SUITS[su][0] };
+  }
+  function makeStackBank(id, name, about, cards) {
+    var list = cards.map(parseCard);
+    return {
+      id: id, name: name, tag: "card", builtin: true, wide: true, stack: true, about: about,
+      derivedDefs: [["card", "Card (Four of Clubs)"], ["short", "Card short (4♣)"], ["code", "Card code (4C)"], ["rank", "Rank (Four)"], ["suit", "Suit (Clubs)"], ["suitSymbol", "Suit symbol (♣)"], ["color", "Colour (Red/Black)"],
+        ["prev", "Card before it in the stack"], ["next", "Card after it in the stack"], ["fromBottom", "Card the same distance from the bottom"]],
+      sample: { position: 10 }, invalidNote: "that position isn’t in the stack.",
+      fields: [{ id: "position", label: "Position", type: "int", min: 1, max: list.length }],
+      derive: function (v) {
+        var c = list[v.position - 1]; if (!c) return null;
+        var p = list[v.position - 2], n = list[v.position], b = list[list.length - v.position];
+        return { card: c.name, short: c.short, code: c.code, rank: c.rank, suit: c.suit, suitSymbol: c.symbol, color: c.color, prev: p ? p.name : "", next: n ? n.name : "", fromBottom: b ? b.name : "" };
+      }
+    };
+  }
+  var MNEMONICA = "4C 2H 7D 3C 4H 6D AS 5H 9S 2S QH 3D QC 8H 6S 5S 9H KC 2D JH 3S 8S 6H 10C 5D KD 2C 3H 8D 5C KS JD 8C 10S KH JC 7S 10H AD 4S 7H 4D AC 9C JS QD 7C QS 10D 6C AH 9D".split(" ");
+  var STEBBINS = (function () { var out = [], suits = ["C", "H", "S", "D"], r = 1; for (var i = 0; i < 52; i++) { out.push(RANK_SHORT[r - 1] + suits[i % 4]); r = (r + 2) % 13 + 1; } return out; })();
+  var NEWDECK = (function () { var out = [], i; for (i = 1; i <= 13; i++) out.push(RANK_SHORT[i - 1] + "S"); for (i = 1; i <= 13; i++) out.push(RANK_SHORT[i - 1] + "D"); for (i = 13; i >= 1; i--) out.push(RANK_SHORT[i - 1] + "C"); for (i = 13; i >= 1; i--) out.push(RANK_SHORT[i - 1] + "H"); return out; })();
+  BANKS.mnemonica = makeStackBank("mnemonica", "Stack: Mnemonica (Tamariz)", "Juan Tamariz’s Mnemonica stack. A number from 1 to 52 gives the card at that position, plus the cards either side of it. Check it against your own copy before relying on it.", MNEMONICA);
+  BANKS.stebbins = makeStackBank("stebbins", "Stack: Si Stebbins", "The Si Stebbins stack (CHaSeD order, each card three higher than the last). A number from 1 to 52 gives the card at that position.", STEBBINS);
+  BANKS.newdeck = makeStackBank("newdeck", "Stack: New deck order", "A factory-fresh deck: A–K spades, A–K diamonds, K–A clubs, K–A hearts. A number from 1 to 52 gives the card at that position.", NEWDECK);
+
+  // ── user-made banks ──
+  // cfg.banks: [{ id, name, tag, fields:[{id,label,min,max,pad}],
+  //               lookup:{ keyField, columns:[{id,label}], rows:[{key, values:{colId:text}}], onMissing:"blank"|"skip" } }]
+  // A custom bank records plain numbers (any size) and can add extra text columns through its lookup table.
+  function padText(v, pad) {
+    var s = String(v);
+    while (pad > 0 && s.length < pad) s = "0" + s;
+    return s;
+  }
+  function makeCustomBank(def) {
+    var fields = (def.fields || []).map(function (f) {
+      return { id: f.id, label: f.label || f.id, type: "num", min: (typeof f.min === "number" ? f.min : null), max: (typeof f.max === "number" ? f.max : null), pad: f.pad > 0 ? f.pad : 0 };
+    });
+    var lookup = def.lookup && def.lookup.keyField && def.lookup.columns && def.lookup.columns.length ? def.lookup : null;
+    var sample = {};
+    fields.forEach(function (f) { sample[f.id] = f.min != null ? f.min : 1; });
+    if (lookup && lookup.rows && lookup.rows.length) {
+      var k = parseFloat(lookup.rows[0].key); if (!isNaN(k)) sample[lookup.keyField] = k;
+    }
+    var derivedDefs = [];
+    fields.forEach(function (f) { derivedDefs.push([f.id + "Text", f.label + " (as text" + (f.pad ? ", " + f.pad + " digits" : "") + ")"]); });
+    if (fields.length > 1) derivedDefs.push(["all", "All values together"]);
+    if (lookup) { lookup.columns.forEach(function (c) { derivedDefs.push([c.id, c.label || c.id]); }); derivedDefs.push(["lookupFound", "Found in the table? (yes/no)"]); }
+    var isStack = def.kind === "stack" && lookup;
+    if (isStack) { var c0 = lookup.columns[0]; derivedDefs.push(["prev", "Before it (" + (c0.label || c0.id) + ")"], ["next", "After it (" + (c0.label || c0.id) + ")"], ["fromBottom", "Same distance from the bottom (" + (c0.label || c0.id) + ")"]); }
+    return {
+      id: def.id, name: def.name || "Untitled bank", tag: def.tag || "number", custom: true,
+      fields: fields, sample: sample, derivedDefs: derivedDefs, lookup: lookup,
+      derive: function (v) {
+        var out = {}, all = [];
+        fields.forEach(function (f) { var t = padText(v[f.id], f.pad); out[f.id + "Text"] = t; all.push(t); });
+        if (fields.length > 1) out.all = all.join(" ");
+        if (lookup) {
+          var keyF = fields.filter(function (f) { return f.id === lookup.keyField; })[0];
+          var raw = String(v[lookup.keyField]), padded = keyF ? padText(v[lookup.keyField], keyF.pad) : raw;
+          var row = null;
+          (lookup.rows || []).forEach(function (r) {
+            var key = String(r.key).trim().toLowerCase();
+            if (!row && (key === raw.toLowerCase() || key === padded.toLowerCase() || (key !== "" && !isNaN(Number(key)) && Number(key) === Number(raw)))) row = r;
+          });
+          if (!row && lookup.onMissing === "skip") return null;
+          lookup.columns.forEach(function (c) { out[c.id] = row && row.values && row.values[c.id] != null ? String(row.values[c.id]) : ""; });
+          out.lookupFound = row ? "yes" : "no";
+          if (isStack) {
+            var c0id = lookup.columns[0].id, n = Number(raw), total = (lookup.rows || []).length;
+            var at = function (pos) { var hit = null; (lookup.rows || []).forEach(function (r) { if (!hit && Number(String(r.key).trim()) === pos) hit = r; }); return hit && hit.values && hit.values[c0id] != null ? String(hit.values[c0id]) : ""; };
+            out.prev = at(n - 1); out.next = at(n + 1); out.fromBottom = total ? at(total + 1 - n) : "";
+          }
+        }
+        return out;
+      }
+    };
+  }
+  /** Built-in banks plus the ones the user made. */
+  function resolveBanks(cfg) {
+    var all = {};
+    Object.keys(BANKS).forEach(function (k) { all[k] = BANKS[k]; });
+    ((cfg && cfg.banks) || []).forEach(function (d) { if (d && d.id && !all[d.id]) all[d.id] = makeCustomBank(d); });
+    return all;
+  }
+  /** A self-describing summary other apps can read from the shared data. */
+  function bankMeta(bank) {
+    var fields = bank.fields.map(function (f) { return { id: f.id, label: f.label, kind: "number" }; });
+    (bank.derivedDefs || []).forEach(function (d) { fields.push({ id: d[0], label: d[1], kind: d[2] === "number" ? "number" : "text", derived: true }); });
+    return { name: bank.name, tag: bank.tag || "", fields: fields };
+  }
+
   /** The original app's behaviour, expressed as a pattern. */
   function defaultConfig() {
     return {
       v: 1,
       forceNumber: null,
+      banks: [],
       activePattern: "birthday",
       patterns: [{
         id: "birthday",
@@ -186,6 +427,7 @@
     var cfg = env.loadConfig ? env.loadConfig() : null;
     if (!cfg || cfg.v !== 1 || !cfg.patterns || !cfg.patterns.length) cfg = defaultConfig();
     var forceNumber = (typeof cfg.forceNumber === "number") ? cfg.forceNumber : null;
+    var banks = resolveBanks(cfg);
 
     function pattern() {
       for (var i = 0; i < cfg.patterns.length; i++) if (cfg.patterns[i].id === cfg.activePattern) return cfg.patterns[i];
@@ -633,8 +875,8 @@
       pat.captures.forEach(function (c) { (byBank[c.bank] = byBank[c.bank] || []).push(c); });
       if (!pat.captures.length) notes.push("This pattern records nothing (no numbers are set to be recorded).");
       Object.keys(byBank).forEach(function (bankId) {
-        var bank = BANKS[bankId];
-        if (!bank) return;
+        var bank = banks[bankId];
+        if (!bank) { notes.push("A recording uses a bank that no longer exists."); return; }
         var caps = byBank[bankId], i;
         function posOf(c) { return typeof c.pos === "number" ? c.pos : c.step + 1; }
         // every capture needs its number to exist (all-or-nothing, as in the original)
@@ -651,7 +893,7 @@
           }
           var num = parseDoubleStrict(entry.v);
           if (num === null) { notes.push(bank.name + " " + caps[i].field + ": “" + entry.v + "” isn’t a number."); return; }
-          values[caps[i].field] = isNaN(num) ? 0 : (Math.round(num) | 0);
+          values[caps[i].field] = isNaN(num) ? 0 : ((bank.custom || bank.wide) ? Math.round(num) : (Math.round(num) | 0));
         }
         for (i = 0; i < bank.fields.length; i++) {
           var f = bank.fields[i], v = values[f.id];
@@ -660,14 +902,15 @@
         }
         var fields = {};
         Object.keys(values).forEach(function (k) { fields[k] = values[k]; });
-        var derived = bank.derive(values);
+        var derived = bank.derive(values, env.now ? env.now() : Date.now());
+        if (derived === null) { notes.push(bank.name + ": " + (bank.invalidNote || "nothing in the lookup table for that number") + " Nothing was recorded."); return; }
         Object.keys(derived).forEach(function (k) { fields[k] = derived[k]; });
         var key = bankId + JSON.stringify(values);
         if (carried.length && key === chainKey) { notes.push("Already recorded " + bank.name + " earlier in this sum."); return; }
         chainKey = key;
-        var record = { bank: bankId, pattern: pat.id, ts: env.now ? env.now() : Date.now(), fields: fields };
+        var record = { bank: bankId, pattern: pat.id, ts: env.now ? env.now() : Date.now(), fields: fields, meta: bankMeta(bank) };
         if (env.publish) env.publish(record);
-        notes.push("Recorded " + bank.name + ": " + (fields.date || JSON.stringify(values)) + ".");
+        notes.push("Recorded " + bank.name + ": " + (fields.date || fields.all || fields[bank.fields[0].id + "Text"] || JSON.stringify(values)) + ".");
         var n = pat.notify;
         if (n && n.enabled && n.bank === bankId) scheduleNotification(record, n);
       });
@@ -724,6 +967,7 @@
         if (!c || c.v !== 1 || !c.patterns || !c.patterns.length) return false;
         cfg = JSON.parse(JSON.stringify(c));
         if (!cfg.patterns.some(function (p) { return p.id === cfg.activePattern; })) cfg.activePattern = cfg.patterns[0].id;
+        banks = resolveBanks(cfg);
         forceNumber = (typeof cfg.forceNumber === "number") ? cfg.forceNumber : null;
         savePrefs(); return true;
       },
@@ -744,9 +988,9 @@
   }
 
   return {
-    VERSION: 9, createCalc: createCalc, defaultConfig: defaultConfig, BANKS: BANKS,
+    VERSION: 11, createCalc: createCalc, defaultConfig: defaultConfig, BANKS: BANKS, resolveBanks: resolveBanks, bankMeta: bankMeta,
     formatResult: formatResult,
     getStarSign: getStarSign, getCelebrity: getCelebrity, monthName: monthName,
-    fillTemplate: fillTemplate, parseDoubleStrict: parseDoubleStrict
+    fillTemplate: fillTemplate, parseDoubleStrict: parseDoubleStrict, parseCard: parseCard, dataTable: dataTable
   };
 });
