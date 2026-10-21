@@ -386,6 +386,12 @@
     }
     function sec(id, node) { node.setAttribute("data-sec", id); return node; }
 
+    function versionLine() {
+      var app = api.appVersion, eng = FE.VERSION, set = 9;
+      var ok = app === eng && eng === set;
+      return el("div", { class: ok ? "hint" : "warn", style: "text-align:center;margin-top:10px",
+        text: ok ? "Calculator v" + app : "Files out of sync (page v" + app + ", engine v" + eng + ", settings v" + set + "). Close the app fully and reopen it while online." });
+    }
     function build() {
       overlay.innerHTML = "";
       var menu = el("div", { class: "navmenu" }, SECTIONS.map(function (x) {
@@ -399,10 +405,11 @@
         el("button", { class: "btn main", style: "margin:0", text: "Done", onclick: close })]));
       overlay.appendChild(el("div", { class: "wrap" }, [sec("force", forceCard()), sec("tricks", patternsCard()), sec("equation", equationCard()),
         sec("notify", notifyCard()), sec("data", dataCard()), sec("backup", backupCard()),
-        el("div", { class: "hint", style: "text-align:center;margin-top:6px", text: "Changes save as you make them." })]));
+        el("div", { class: "hint", style: "text-align:center;margin-top:6px", text: "Changes save as you make them." }),
+        versionLine()]));
     }
     build();
   }
 
-  root.FCSettings = { open: open };
+  root.FCSettings = { VERSION: 9, open: open };
 })(typeof self !== "undefined" ? self : this);

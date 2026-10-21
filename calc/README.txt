@@ -17,6 +17,8 @@ Hidden parts
   - long-press the display (buzz)    -> armed; tap 3 times; the last number you type is solved so the
                                          whole sum equals the force number; press =
   - AC                               -> always gets you out of the armed / forced states
+  - Pressing = in the middle of a sum is fine: the numbers typed before it still count, in order, so the
+    day/month are read from the whole chain (9+9= x2 x3 x4 reads 9, 9, 2, 3, 4).
   - Recording: every number typed is logged with the operator before it (brackets ignored); the
     Equation builder says which of them are recorded (e.g. Day x Month first). Recorded info goes to
     the shared "bus" (localStorage fc_bus_v1) for Notary, and optionally to a notification.

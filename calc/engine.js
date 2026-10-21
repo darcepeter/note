@@ -174,6 +174,7 @@
     var mode = MODE.NORMAL;
     var forceEntryVal = "0", facedownTaps = 0, lastEquation = "";
     var deg = true, inv = false;
+    var carried = [], lastNums = [], chainKey = null;   // numbers typed before an in-between "=", so the whole chain is recorded
     var lastLog = [];           // what the last "=" recorded (for tests / debugging)
     var displayTapCount = 0, lastDisplayTapTime = 0;
     var currentSettingIndex = 0, settingInputBuffer = "";
@@ -325,10 +326,11 @@
 
     /** Every typed number in order, with the operator right before it (brackets ignored). First has op null. */
     function buildNumLog(skipInjected) {
-      var log = [], prevOp = null;
+      var log = carried.slice(), prevOp = null;
       toks.forEach(function (t) {
         if (t.t === "o") prevOp = t.v;
         else if (t.t === "n") {
+          if (t.carry) { prevOp = null; return; }           // a result carried over from an earlier "=": not a typed number
           if (!(skipInjected && t.inj)) log.push({ op: log.length ? prevOp : null, v: t.c ? formatResult(numValue(t)) : formatForHistory(t.v) });
           prevOp = null;
         }
@@ -357,7 +359,7 @@
       expireFacedown();
       // AC always gets you out of the hidden modes, so the calculator can never feel stuck
       if (val === "AC" && (mode === MODE.FACEDOWN || mode === MODE.INJECTED)) {
-        mode = MODE.NORMAL; facedownTaps = 0; injectedNow = false; toks = []; justEvaluated = false; lastEquation = ""; resultVal = "0";
+        mode = MODE.NORMAL; facedownTaps = 0; injectedNow = false; startFresh(); lastEquation = ""; resultVal = "0";
         refreshDisplay(); return;
       }
       switch (mode) {
@@ -369,13 +371,13 @@
     }
 
     // ── NORMAL ──
-    function startFresh() { toks = []; justEvaluated = false; }
+    function startFresh() { toks = []; justEvaluated = false; carried = []; lastNums = []; chainKey = null; }
     function operandEnded(t) { return !!t && ((t.t === "n" && hasDigit(t)) || t.t === ")" || t.t === "!"); }
-    function fromResult() { if (justEvaluated) { toks = [{ t: "n", v: resultVal }]; justEvaluated = false; } return lastTok(); }
+    function fromResult() { if (justEvaluated) { carried = lastNums.slice(); toks = [{ t: "n", v: resultVal, carry: true }]; justEvaluated = false; } return lastTok(); }
     var FN_KEYS = { "sin": ["sin", "asin"], "cos": ["cos", "acos"], "tan": ["tan", "atan"], "ln": ["ln", "exp"], "log": ["log", "tenpow"], "√": ["sqrt", null] };
     function pressNormal(val) {
       var t = lastTok();
-      if (val === "AC") { toks = []; justEvaluated = false; lastEquation = ""; resultVal = "0"; refreshDisplay(); return; }
+      if (val === "AC") { startFresh(); lastEquation = ""; resultVal = "0"; refreshDisplay(); return; }
       if (val === "Deg") { deg = !deg; return; }
       if (val === "Inv") { inv = !inv; return; }
       if (val === "⌫") {
@@ -454,6 +456,7 @@
         var exprC = exprText(l, false, true);
         injectedNow = false;
         toks = l.slice();
+        lastNums = nums;
         var notes = tryCapture(nums);
         if (env.evaluated) env.evaluated({ expr: exprC, result: showNum(resultVal), numbers: nums.map(function (x) { return (x.op || "") + " " + x.v; }), notes: notes, pattern: pattern().name });
         refreshDisplay();
@@ -596,7 +599,7 @@
     function injectForce() {
       if (forceNumber === null) { mode = MODE.NORMAL; return; }
       var target = forceNumber, t;
-      if (justEvaluated) { toks = []; justEvaluated = false; }
+      if (justEvaluated) startFresh();
       t = lastTok();
       if (t && t.t === "n" && !hasDigit(t)) { toks.pop(); t = lastTok(); }
       var anyOp = toks.some(function (x) { return x.t === "o" || x.t === "(" || x.t === "f" || x.t === "!"; });
@@ -659,6 +662,9 @@
         Object.keys(values).forEach(function (k) { fields[k] = values[k]; });
         var derived = bank.derive(values);
         Object.keys(derived).forEach(function (k) { fields[k] = derived[k]; });
+        var key = bankId + JSON.stringify(values);
+        if (carried.length && key === chainKey) { notes.push("Already recorded " + bank.name + " earlier in this sum."); return; }
+        chainKey = key;
         var record = { bank: bankId, pattern: pat.id, ts: env.now ? env.now() : Date.now(), fields: fields };
         if (env.publish) env.publish(record);
         notes.push("Recorded " + bank.name + ": " + (fields.date || JSON.stringify(values)) + ".");
@@ -738,7 +744,7 @@
   }
 
   return {
-    createCalc: createCalc, defaultConfig: defaultConfig, BANKS: BANKS,
+    VERSION: 9, createCalc: createCalc, defaultConfig: defaultConfig, BANKS: BANKS,
     formatResult: formatResult,
     getStarSign: getStarSign, getCelebrity: getCelebrity, monthName: monthName,
     fillTemplate: fillTemplate, parseDoubleStrict: parseDoubleStrict
